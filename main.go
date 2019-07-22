@@ -41,6 +41,12 @@ type FuncPublico struct {
 	VlSalario float64
 }
 
+type User struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
 func setupRouter() *gin.Engine {
 	// Disable Console Color
 	// gin.DisableConsoleColor()
@@ -65,6 +71,7 @@ func setupRouter() *gin.Engine {
 	})
 
 	r.POST("/login", Login)
+	r.POST("/testecsv", testeCSV)
 
 	authorized := r.Group("/", gin.BasicAuth(gin.Accounts{
 		"admin": "admin",
@@ -72,7 +79,8 @@ func setupRouter() *gin.Engine {
 
 	authorized.GET("dale", dale)
 	authorized.POST("users", registerUser)
-	// Get Users
+	authorized.GET("users", getUsers)
+
 	// Get notificações
 	// Get Clientes
 	// Funcionarios publicos dos ultimos meses
@@ -364,3 +372,147 @@ func registerAdministrator(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
 	}
 }
+
+func getUsers(c *gin.Context) {
+	db, err := initDB()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT id, name, email FROM usuarios ORDER BY name LIMIT $1", 10)
+	defer rows.Close()
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+	}
+
+	usrs := []User{}
+
+	for rows.Next() {
+		usr := new(User)
+		rows.Scan(&usr.ID, &usr.Name, &usr.Email)
+		usrs = append(usrs, *usr)
+	}
+	c.JSON(http.StatusOK, usrs)
+}
+
+func testeCSV(c *gin.Context) {
+	// Capturando arquivo com o ID file
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+	}
+
+	// Salvando arquivo localmente
+	err = c.SaveUploadedFile(file, "uploadClientes.csv")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+	}
+
+	// Abrindo arquivo salvo
+	f, err := os.Open("uploadClientes.csv")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+	}
+	defer f.Close()
+
+	//Abrindo conexão com o banco de dados
+	db, err := initDB()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+	}
+	defer db.Close()
+
+	// Abre transação
+	trc, _ := db.Begin()
+
+	// Inicia leitura do CSV
+	r := csv.NewReader(bufio.NewReader(f))
+
+	//Iterando pelo arquivo
+	for {
+		record, err := r.Read()
+
+		if err == io.EOF {
+			break
+		}
+		//_ = record[0]
+		//log.Println("antes do print")
+		if rowExists("SELECT id FROM clientes WHERE name=$1", db, record[0]) {
+			continue
+		}
+		//log.Println(record[0])
+		_, err = trc.Exec("INSERT INTO clientes (name, created_on) VALUES ($1, now())", record[0])
+		if err != nil {
+			trc.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		}
+	}
+
+	err = trc.Commit()
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"msg": "Clientes inseridos."})
+}
+
+/*
+func uploadCliente(c *gin.Context) {
+	fmt.Println("POST")
+	db, err := initDB()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+	}
+	defer db.Close()
+
+	file, err := c.FormFile("file") //aqui será um parametro
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+	}
+
+	err = c.SaveUploadedFile(file, "uploadClientes.csv")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Abrindo arquivo
+	f, err := os.Open("uploadClientes.csv")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	var resultsja [][]string
+
+	reader := csv.NewReader(bufio.NewReader(file))
+	t := 0
+	j := 0
+	i := 0
+	record, err := reader.ReadAll()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+	}
+	for _, line := range record {
+		if rowExists("SELECT id FROM clientes WHERE name=$1", db, line[0]) {
+			fmt.Println("Cliente já cadastrado.")
+			j++
+		} else {
+			_, err = db.Exec("INSERT INTO clientes (name, created_on) VALUES ($1, now())", line[0])
+			if err != nil {
+				fmt.Println("ERRO 500: não foi possível conectar ao BD.")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			i++
+		}
+		t++
+	}
+	fmt.Println("Total importado", t)
+	fmt.Println("Já cadastrados", j)
+	fmt.Println("Novos", i)
+	//return resulsja
+	//return OK???
+}*/
