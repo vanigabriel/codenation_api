@@ -27,26 +27,10 @@ func setupRouter() *gin.Engine {
 	// Loga para arquivo
 	gin.DefaultWriter = io.MultiWriter(logFile, os.Stdout)
 
-	r.GET("/welcome", func(c *gin.Context) {
-		firstname := c.DefaultQuery("firstname", "Guest")
-		lastname := c.Query("lastname") // shortcut for c.Request.URL.Query().Get("lastname")
-
-		c.String(http.StatusOK, "Hello %s %s", firstname, lastname)
-	})
-
-	r.POST("/form_post", func(c *gin.Context) {
-		message := c.PostForm("message")
-		nick := c.DefaultPostForm("nick", "anonymous")
-
-		c.JSON(200, gin.H{
-			"status":  "posted",
-			"message": message,
-			"nick":    nick,
-		})
-	})
-
+	// Requisição do login inicial
 	r.POST("/login", Login)
 
+	// Para acessar esse grupo, precisa enviar na requisição o user: admin e pass: admin, modelo basic auth
 	authorized := r.Group("/", gin.BasicAuth(gin.Accounts{
 		"admin": "admin",
 	}))
@@ -57,10 +41,11 @@ func setupRouter() *gin.Engine {
 	authorized.PUT("users", updateUser)
 	authorized.DELETE("users/:id", deleteUser)
 
-	authorized.POST("clientes", uploadCliente)
+	authorized.POST("clients", uploadCliente)
+	authorized.GET("clients", getClientes) // Get Clientes
 
 	// Get notificações
-	// Get Clientes
+
 	// Funcionarios publicos dos ultimos meses
 	// Verificar Docker
 	// DAshboard : Qtd total de +20mil, qtd q eu detenho, valor, dos ultimos meses, o mairo valor de salário, menor valor de salário, média, qtd de pessoa por orgão
@@ -146,7 +131,7 @@ func Login(c *gin.Context) {
 	defer db.Close()
 
 	// Recupera senha
-	row := db.QueryRow("SELECT password FROM administradores WHERE username=$1", creds.Username)
+	row := db.QueryRow("SELECT password FROM administrators WHERE username=$1", creds.Username)
 
 	storedCreds := &Credentials{}
 	err = row.Scan(&storedCreds.Password) // guardando a passw para comparar
@@ -169,6 +154,7 @@ func Login(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"user": "admin", "pass": "admin"})
 }
 
+// Registra administrador
 func registerAdministrator(c *gin.Context) {
 	creds := &Credentials{}
 	c.BindJSON(&creds)
@@ -179,12 +165,13 @@ func registerAdministrator(c *gin.Context) {
 	}
 
 	db, err := initDB()
-	_, err = db.Exec("INSERT INTO administradores (username, password, created_on) VALUES ($1, $2, now())", creds.Username, string(hashpwd))
+	_, err = db.Exec("INSERT INTO administrators (username, password, created_on) VALUES ($1, $2, now())", creds.Username, string(hashpwd))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 	}
 }
 
+// Recupera usuários que receberão os e-mails
 func getUsers(c *gin.Context) {
 	db, err := initDB()
 	if err != nil {
@@ -192,7 +179,7 @@ func getUsers(c *gin.Context) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT id, name, email FROM usuarios ORDER BY name")
+	rows, err := db.Query("SELECT id, name, email FROM users ORDER BY name")
 	defer rows.Close()
 
 	if err != nil {
@@ -209,6 +196,32 @@ func getUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, usrs)
 }
 
+// Recupera os clientes
+func getClientes(c *gin.Context) {
+	db, err := initDB()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT id, name, salary, position, place, case when is_special = True then 'yes' else 'no' end as is_special FROM clients ORDER BY name")
+	defer rows.Close()
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
+	}
+
+	clients := []Clientes{}
+
+	for rows.Next() {
+		client := new(Clientes)
+		rows.Scan(&client.ID, &client.Name, &client.Salary, &client.Position, &client.Place, &client.IsClient)
+		clients = append(clients, *client)
+	}
+	c.JSON(http.StatusOK, clients)
+}
+
+// Faz upload dos clientes (arquivo csv)
 func uploadCliente(c *gin.Context) {
 	// Capturando arquivo com o ID file
 	file, err := c.FormFile("file")
@@ -252,12 +265,12 @@ func uploadCliente(c *gin.Context) {
 		}
 
 		// Se já existe aquele cliente, não faz nada
-		if rowExists("SELECT id FROM clientes WHERE name=$1", db, record[0]) {
+		if rowExists("SELECT id FROM clients WHERE name=$1", db, record[0]) {
 			continue
 		}
 
 		// Insere cliente
-		_, err = trc.Exec("INSERT INTO clientes (name, created_on) VALUES ($1, now())", record[0])
+		_, err = trc.Exec("INSERT INTO clients (name, created_on) VALUES ($1, now())", record[0])
 		if err != nil {
 			trc.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"message": err})

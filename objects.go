@@ -47,8 +47,18 @@ type Credentials struct {
 	Username string `json:"username"`
 }
 
-// Users estrutura para guardar usuários
+// Users estrutura que guarda os dados da tabela users
 type Users struct {
 	Name  string `json:"name"`
 	Email string `json:"email"`
+}
+
+// Clientes estrutura que guarda os dados da tabela clients
+type Clientes struct {
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	Salary   float64 `json:"salary"`
+	Position string  `json:"position"`
+	Place    string  `json:"place"`
+	IsClient string  `json:"isclient"`
 }
