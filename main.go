@@ -71,7 +71,6 @@ func setupRouter() *gin.Engine {
 	})
 
 	r.POST("/login", Login)
-	r.POST("/testecsv", testeCSV)
 
 	authorized := r.Group("/", gin.BasicAuth(gin.Accounts{
 		"admin": "admin",
@@ -80,11 +79,11 @@ func setupRouter() *gin.Engine {
 	authorized.GET("dale", dale)
 	authorized.POST("users", registerUser)
 	authorized.GET("users", getUsers)
-
+	authorized.POST("/clientes", uploadCliente)
 	// Get notificações
 	// Get Clientes
 	// Funcionarios publicos dos ultimos meses
-	// Post Cliends upload
+	// OK Post Cliends upload
 	// Verificar Docker
 	// DAshboard : Qtd total de +20mil, qtd q eu detenho, valor, dos ultimos meses, o mairo valor de salário, menor valor de salário, média, qtd de pessoa por orgão
 	authorized.POST("admin", registerAdministrator)
@@ -316,12 +315,12 @@ func Login(c *gin.Context) {
 	c.BindJSON(&creds)
 
 	if creds.Username == "" || creds.Password == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Dados obrigatórios não recebidos"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Dados obrigatórios não recebidos"})
 	}
 
 	db, err := initDB()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Não foi possível conectar ao banco de dados"})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 	}
 	defer db.Close()
 
@@ -331,15 +330,15 @@ func Login(c *gin.Context) {
 	err = row.Scan(&storedCreds.Password) // guardando a passw para comparar
 	if err != nil {
 		if err == sql.ErrNoRows {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "usuário não encontrado."})
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "usuário não encontrado."})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Não foi possível conectar ao banco de dados"})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 	}
 
-	//err = bcrypt.CompareHashAndPassword([]byte(storedCreds.Password), []byte(creds.Password));
+	err = bcrypt.CompareHashAndPassword([]byte(storedCreds.Password), []byte(creds.Password))
 
-	if storedCreds.Password != creds.Password {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Senha incorreta"})
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Senha incorreta"})
 		return
 	}
 
@@ -363,28 +362,28 @@ func registerAdministrator(c *gin.Context) {
 
 	hashpwd, err := bcrypt.GenerateFromPassword([]byte(creds.Password), hashCost)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Problemas para criptografar a senha."})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Problemas para criptografar a senha."})
 	}
 
 	db, err := initDB()
 	_, err = db.Exec("INSERT INTO administradores (username, password, created_on) VALUES ($1, $2, now())", creds.Username, string(hashpwd))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 	}
 }
 
 func getUsers(c *gin.Context) {
 	db, err := initDB()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT id, name, email FROM usuarios ORDER BY name LIMIT $1", 10)
+	rows, err := db.Query("SELECT id, name, email FROM usuarios ORDER BY name")
 	defer rows.Close()
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 	}
 
 	usrs := []User{}
@@ -397,30 +396,30 @@ func getUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, usrs)
 }
 
-func testeCSV(c *gin.Context) {
+func uploadCliente(c *gin.Context) {
 	// Capturando arquivo com o ID file
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 	}
 
 	// Salvando arquivo localmente
 	err = c.SaveUploadedFile(file, "uploadClientes.csv")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 	}
 
 	// Abrindo arquivo salvo
 	f, err := os.Open("uploadClientes.csv")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 	}
 	defer f.Close()
 
 	//Abrindo conexão com o banco de dados
 	db, err := initDB()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 	}
 	defer db.Close()
 
@@ -434,29 +433,32 @@ func testeCSV(c *gin.Context) {
 	for {
 		record, err := r.Read()
 
+		// Se fim de arquivo
 		if err == io.EOF {
 			break
 		}
-		//_ = record[0]
-		//log.Println("antes do print")
+
+		// Se já existe aquele cliente, não faz nada
 		if rowExists("SELECT id FROM clientes WHERE name=$1", db, record[0]) {
 			continue
 		}
-		//log.Println(record[0])
+
+		// Insere cliente
 		_, err = trc.Exec("INSERT INTO clientes (name, created_on) VALUES ($1, now())", record[0])
 		if err != nil {
 			trc.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 		}
 	}
 
+	// Commit transação
 	err = trc.Commit()
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"msg": "Clientes inseridos."})
+	c.JSON(http.StatusCreated, gin.H{"message": "Clientes inseridos."})
 }
 
 /*
