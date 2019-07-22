@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	//_ "./docs/docs.go" // For gin-swagger
 
@@ -47,10 +48,15 @@ type User struct {
 	Email string `json:"email"`
 }
 
+var logFile, _ = os.OpenFile("log_"+time.Now().Format("01-02-2006")+".log", os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660)
+
 func setupRouter() *gin.Engine {
 	// Disable Console Color
 	// gin.DisableConsoleColor()
 	r := gin.Default()
+
+	// Loga para arquivo
+	gin.DefaultWriter = io.MultiWriter(logFile, os.Stdout)
 
 	r.GET("/welcome", func(c *gin.Context) {
 		firstname := c.DefaultQuery("firstname", "Guest")
@@ -93,7 +99,22 @@ func setupRouter() *gin.Engine {
 
 func main() {
 
-	handleError(godotenv.Load()) //Load environmenatal variables
+	handleError(godotenv.Load()) // Load env variables
+
+	// Configura log para arquivo
+	wrt := io.MultiWriter(os.Stdout, logFile)
+	log.SetOutput(wrt)
+	defer logFile.Close()
+
+	// A cada 24hrs ele vai disparar a função que baixa e importa o CSV dos funcionários publicos de SP
+	ticker := time.NewTicker(24 * time.Hour)
+	go func() {
+		// Realiza uma execução antes de começar o contador
+		baixarCSV()
+		for range ticker.C {
+			baixarCSV()
+		}
+	}()
 
 	r := setupRouter()
 	// Listen and Server in 0.0.0.0:8080
@@ -288,32 +309,41 @@ type Users struct {
 
 func registerUser(c *gin.Context) {
 	usrs := &Users{}
+	// Junta JSON com a struct
 	c.BindJSON(&usrs)
 
+	// Valida e-mail
 	if usrs.Email == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Dados obrigatórios não recebidos"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Dados obrigatórios não recebidos"})
 	}
 
+	// Abre conexão com o banco
 	db, err := initDB()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Não foi possível conectar ao banco de dados"})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 	}
 	defer db.Close()
 
+	// Valida se já existe usuário com esse email
 	if rowExists("SELECT id FROM usuarios WHERE email=$1", db, usrs.Email) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Email já cadastrado"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Email já cadastrado"})
 	}
 
+	// Insere
 	_, err = db.Exec("INSERT INTO usuarios (name, email, created_on) VALUES ($1, $2, now())", usrs.Name, usrs.Email)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Não foi possível conectar ao banco de dados"})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 	}
+
+	// Retorna OK
+	c.JSON(http.StatusOK, gin.H{"message": "Usuário inserido"})
 }
 
 func Login(c *gin.Context) {
 	creds := &Credentials{}
 	c.BindJSON(&creds)
 
+	// Valida se a msg está correta
 	if creds.Username == "" || creds.Password == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Dados obrigatórios não recebidos"})
 	}
@@ -324,6 +354,7 @@ func Login(c *gin.Context) {
 	}
 	defer db.Close()
 
+	// Recupera senha
 	row := db.QueryRow("SELECT password FROM administradores WHERE username=$1", creds.Username)
 
 	storedCreds := &Credentials{}
@@ -335,6 +366,7 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 	}
 
+	// Criptografa a senha informada e compara com a do banco
 	err = bcrypt.CompareHashAndPassword([]byte(storedCreds.Password), []byte(creds.Password))
 
 	if err != nil {
@@ -460,61 +492,3 @@ func uploadCliente(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Clientes inseridos."})
 }
-
-/*
-func uploadCliente(c *gin.Context) {
-	fmt.Println("POST")
-	db, err := initDB()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
-	}
-	defer db.Close()
-
-	file, err := c.FormFile("file") //aqui será um parametro
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err})
-	}
-
-	err = c.SaveUploadedFile(file, "uploadClientes.csv")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Abrindo arquivo
-	f, err := os.Open("uploadClientes.csv")
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	var resultsja [][]string
-
-	reader := csv.NewReader(bufio.NewReader(file))
-	t := 0
-	j := 0
-	i := 0
-	record, err := reader.ReadAll()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
-	}
-	for _, line := range record {
-		if rowExists("SELECT id FROM clientes WHERE name=$1", db, line[0]) {
-			fmt.Println("Cliente já cadastrado.")
-			j++
-		} else {
-			_, err = db.Exec("INSERT INTO clientes (name, created_on) VALUES ($1, now())", line[0])
-			if err != nil {
-				fmt.Println("ERRO 500: não foi possível conectar ao BD.")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			i++
-		}
-		t++
-	}
-	fmt.Println("Total importado", t)
-	fmt.Println("Já cadastrados", j)
-	fmt.Println("Novos", i)
-	//return resulsja
-	//return OK???
-}*/
