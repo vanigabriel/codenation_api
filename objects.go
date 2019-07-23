@@ -30,6 +30,7 @@ type PF struct {
 type FuncPublico struct {
 	Nome      string
 	Cargo     string
+	Orgao     string
 	VlSalario float64
 }
 

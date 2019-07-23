@@ -46,6 +46,38 @@ func setupRouter() *gin.Engine {
 
 	// Get notificações
 
+	/*
+		Esquema notificações:
+			Importa csv -> valida cliente
+
+			Ao fim da importação do csv, ele irá fazer um join com a tabela de clientes, vendo quem ainda não é cliente e ganha +20mil
+			com o resultado, ele irá inserir na tabela de eventos os que não tiveram e-mail enviado a mais de 15 dias
+
+			SELECT currval(pg_get_serial_sequence('fruits', 'id'));
+
+			create table events {
+				id serial primary key,
+				qt_leads integer,
+				created_on timestamp
+			}
+
+			create table events_to {
+				id serial primary key,
+				events_id integer references events (id) not null
+				user_id integer references users (id) not null,
+				sent_at timestamp
+			}
+
+			CREATE TABLE events_leads {
+				id serial primary key,
+				name VARCHAR(150) NOT NULL,
+				event_id integer references events (id) ,
+				CREATED_ON TIMESTAMP NOT NULL
+			}
+
+
+	*/
+
 	// Funcionarios publicos dos ultimos meses
 	// Verificar Docker
 	// DAshboard : Qtd total de +20mil, qtd q eu detenho, valor, dos ultimos meses, o mairo valor de salário, menor valor de salário, média, qtd de pessoa por orgão

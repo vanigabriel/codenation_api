@@ -168,11 +168,25 @@ func importCSV(src string) error {
 		fTemp := FuncPublico{
 			Nome:      reg.ReplaceAllString(record[0], ""),
 			Cargo:     reg.ReplaceAllString(record[1], ""),
+			Orgao:     reg.ReplaceAllString(record[2], ""),
 			VlSalario: salario}
 
 		// Insert na tabela, se tiver conflito não faz nada
-		sql := "insert into funcionarios_publicos as v (nm_funcionarios, nm_cargo, vl_salario) values ($1, $2, $3) ON CONFLICT ON CONSTRAINT funcionarios_publicos_pkey DO nothing"
-		_, err = trc.Exec(sql, fTemp.Nome, fTemp.Cargo, fTemp.VlSalario)
+		sql := "insert into funcionarios_publicos as v (nm_funcionarios, nm_cargo, place, vl_salario) values ($1, $2, $3, $4) ON CONFLICT ON CONSTRAINT funcionarios_publicos_pkey DO nothing"
+		_, err = trc.Exec(sql, fTemp.Nome, fTemp.Cargo, fTemp.Orgao, fTemp.VlSalario)
+		if err != nil {
+			trc.Rollback()
+			return err
+		}
+
+		updateSQL := `UPDATE clients a
+			set a.salary = $1,
+				a.positicon = $2,
+				a.place = $3,
+				a.is_special = true
+			where a.name = $4`
+
+		_, err = trc.Exec(updateSQL, fTemp.VlSalario, fTemp.Cargo, fTemp.Orgao, fTemp.Nome)
 		if err != nil {
 			trc.Rollback()
 			return err
@@ -183,6 +197,51 @@ func importCSV(src string) error {
 	log.Println("Commit efetuado")
 
 	return err
+}
+
+// Cria os eventos
+func createEvents() error {
+	log.Println("Abrindo conexão com o banco")
+	db, err := initDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	sql := `select a.nm_funcionarios, a.nm_cargo, a.place, a.vl_salario
+			from funcionarios_publicos a
+			where a.vl_salario >= 20000 and not exists (select 1 from clients b where b.name = a.nm_funcionarios`
+
+	rows, err := db.Query(sql)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	// Cria CSV
+	csvfile, err := os.Create("test.csv")
+	if err != nil {
+		return err
+	}
+	defer csvfile.Close()
+
+	csvwriter := csv.NewWriter(csvfile)
+
+	for rows.Next() {
+
+		funcp := new(FuncPublico)
+		rows.Scan(&funcp.Nome, &funcp.Cargo, &funcp.Orgao, &funcp.VlSalario)
+
+		// Cria linha
+		row := []string{funcp.Nome, funcp.Cargo, funcp.Orgao, fmt.Sprintf("%f", funcp.VlSalario)}
+		_ = csvwriter.Write(row)
+
+	}
+	csvwriter.Flush()
+
+	return err
+
+	//return nil
 }
 
 // Função para lidar com o erro
