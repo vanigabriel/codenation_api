@@ -8,12 +8,15 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/mail"
+	"net/smtp"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/gen2brain/go-unarr"
+	"github.com/scorredoira/email"
 )
 
 // Função que busca o arquivo de funcionários publicos de SP
@@ -23,7 +26,7 @@ func baixarCSV() error {
 	actualPath, _ := os.Getwd()
 
 	// Monta a requisição para baixar o CSV
-	body := strings.NewReader(`__EVENTTARGET=&__EVENTARGUMENT=&__LASTFOCUS=&__VIEWSTATE=%2FwEPDwULLTIwNDQzOTAyMzEPZBYCAgMPZBYMAgUPEA8WBh4ORGF0YVZhbHVlRmllbGQFCE9SR0FPX0lEHg1EYXRhVGV4dEZpZWxkBQpPUkdBT19ERVNDHgtfIURhdGFCb3VuZGdkEBVbBVRPRE9THUFETUlOSVNUUkFDQU8gR0VSQUwgRE8gRVNUQURPHUFHLk0uVi5QQVIuTElULk5PUlRFIEFHRU1WQUxFHEFHLlJFRy5TQU4uRU4uRVNULlNQLiBBUlNFU1AeQUcuUkVHLlNWLlAuREVMLlRSLkUuU1AgQVJURVNQHUFHRU5DSUEgTUVULkNBTVBJTkFTIEFHRU1DQU1QHkFHRU5DSUEgTUVUUk9QLkIuU0FOVElTVEEgQUdFTShBR0VOQ0lBIE1FVFJPUE9MSVRBTkEgREUgQ0FNUElOQVMgLSBBR0VNKEFHRU5DSUEgTUVUUk9QT0xJVEFOQSBERSBTT1JPQ0FCQSAtIEFHRU0eQy5FLkVELlRFQy5QQVVMQSBTT1VaQS1DRUVURVBTHUMuUC5UUkVOUyBNRVRST1BPTElUQU5PUy1DUFRNHUNBSVhBIEJFTkVGSUMuUE9MSUNJQSBNSUxJVEFSCkNBU0EgQ0lWSUwdQ0VURVNCLUNJQS5BTUJJRU5UQUwgRVNULlMuUC4aQ0lBIERFU0VOVi5BR1JJQy5TUCBDT0RBU1AdQ0lBLkRFUy5IQUIuVVJCLkVTVC5TLlAuLUNESFUeQ0lBLlBBVUxJUy5TRUNVUklUSVpBQ0FPLUNQU0VDHkNJQS5QUk9DLkRBRE9TIEVTVC5TLlAtUFJPREVTUChDSUEuU0FORUFNRU5UTyBCQVNJQ08gRVNULlMuUEFVTE8tU0FCRVNQHkNJQS5TRUdVUk9TIEVTVC5TLlBBVUxPLUNPU0VTUB1DT01QLk1FVFJPUE9MSVRBTk8gUy5QLi1NRVRSTx1DT01QQU5ISUEgRE9DQVMgU0FPIFNFQkFTVElBTyhDT01QQU5ISUEgUEFVTElTVEEgREUgT0JSQVMgRSBTRVJWSUNPUyAtBURBRVNQHURFUEFSVEFNLkVTVFJBREFTIFJPREFHRU0gREVSKERFUEFSVEFNRU5UTyBBR1VBUyBFTkVSR0lBIEVMRVRSSUNBLURBRUUoREVQQVJUQU1FTlRPIEVTVEFEVUFMIERFIFRSQU5TSVRPLURFVFJBTh5ERVBUTy4gRVNULiBUUkFOU0lUTyBERVRSQU4gU1AeREVTRU5WT0xWLlJPRE9WSUFSSU8gUy9BLURFUlNBKERFU0VOVk9MVkUgU1AgQUdFTkNJQSBERSBGT01FTlRPIERPIEVTVEEoRU1BRS1FTVBSRVNBIE1FVFJPUE9MSVRBTkEgREUgQUdVQVMgRSBFTh5FTVAuTUVUUi5UUi5VUkIuU1AuUy9BLUVNVFUtU1AoRU1QLlBBVUxJU1RBIFBMQU5FSi5NRVRST1BMSVRBTk8gUy5BLUVNUBpGQUMuTUVELlMuSi5SLlBSRVRPLUZBTUVSUBtGQUMuTUVESUNJTkEgTUFSSUxJQS1GQU1FTUEaRklURVNQLUpPU0UgR09NRVMgREEgU0lMVkEeRlVORC5BTVBBUk8gUEVTUS5FU1QuU1AtRkFQRVNQHkZVTkQuQ09OUy5QUk9ELkZMT1JFU1RBTCBFLlNQLhxGVU5ELk1FTU9SSUFMIEFNRVJJQ0EgTEFUSU5BHUZVTkQuUEFSUVVFIFpPT0xPR0lDTyBTLlBBVUxPHkZVTkQuUEUuQU5DSElFVEEtQy5QLlJBRElPIFRWLh1GVU5ELlBGLkRSLk0uUC5QSU1FTlRFTC1GVU5BUB5GVU5ELlBSRVYuQ09NUEwuRVNULlNQIFBSRVZDT00eRlVORC5QUk8tU0FOR1VFLUhFTU9DRU5UUk8gUy5QHEZVTkQuUkVNLlBPUC4gQy5ULkxJTUEgLUZVUlAeRlVORC5TSVNULkVTVC5BTkFMLkRBRE9TLVNFQURFHkZVTkQuVU4uVklSVFVBTCBFU1QuU1AgVU5JVkVTUBFGVU5EQUNBTyBDQVNBLVNQLhxGVU5EQUNBTyBERVNFTlYuRURVQ0FDQU8tRkRFHUZVTkRBQ0FPIE9OQ09DRU5UUk8gU0FPIFBBVUxPD0ZVTkRBQ0FPIFBST0NPThZHQUJJTkVURSBETyBHT1ZFUk5BRE9SGkguQy5GQUMuTUVELkJPVFVDQVRVLUhDRk1CHUhDIEZBQyBNRURJQ0lOQSBSSUIgUFJFVE8gVVNQGUhPU1AuQ0xJTi5GQUMuTUVELk1BUklMSUEdSE9TUC5DTElOLkZBQy5NRUQuVVNQLUhDRk1VU1AeSU1QUi5PRklDSUFMIEVTVEFETyBTLkEuIElNRVNQHklOU1QgTUVEIFNPQyBDUklNSU5PIFNQLSBJTUVTQx5JTlNULkFTLk1FRC5TRVJWLlAuRVNULiBJQU1TUEUeSU5TVC5QQUdUT1MuRVNQRUNJQUlTIFNQLUlQRVNQHklOU1QuUEVTT1MgTUVESUQuRS5TLlAtSVBFTS9TUB5JTlNULlBFU1EuVEVDTk9MT0dJQ0FTIEVTVC5TLlAdSlVOVEEgQ09NRVJDLkUuUy5QQVVMTy1KVUNFU1AeUEFVTElTVFVSIFNBLkVNUFIuVFVSLkVTVC5TLlAuGVBPTElDSUEgTUlMSVRBUiBTQU8gUEFVTE8cUFJPQ1VSQURPUklBIEdFUkFMIERPIEVTVEFETx5TQU8gUEFVTE8gUFJFVklERU5DSUEgLSBTUFBSRVYeU0VDLlRSQU5TUE9SVEVTIE1FVFJPUE9MSVRBTk9THlNFQ1IuQUdSSUNVTFRVUkEgQUJBU1RFQ0lNRU5UTx5TRUNSLkNVTFRVUkEgRUNPTk9NSUEgQ1JJQVRJVkEeU0VDUi5ERVNFTlZPTFZJTUVOVE8gRUNPTk9NSUNPHlNFQ1IuRVNULkRJUi5QRVMuQy9ERUZJQ0lFTkNJQR5TRUNSRVQgREUgUkVMQUNPRVMgRE8gVFJBQkFMSE8eU0VDUkVULkFETUlOSVNUUi5QRU5JVEVOQ0lBUklBHlNFQ1JFVC5TQU5FQU1FTlRPIFJFQy5ISURSSUNPUx1TRUNSRVRBUi5GQVpFTkRBIFBMQU5FSkFNRU5UTxZTRUNSRVRBUklBIERBIEVEVUNBQ0FPF1NFQ1JFVEFSSUEgREEgSEFCSVRBQ0FPE1NFQ1JFVEFSSUEgREEgU0FVREUdU0VDUkVUQVJJQSBERSBERVNFTlZPTFZJTUVOVE8WU0VDUkVUQVJJQSBERSBFU1BPUlRFUxVTRUNSRVRBUklBIERFIEdPVkVSTk8eU0VDUkVUQVJJQSBERSBMT0dJU1RJQ0EgRSBUUkFOFVNFQ1JFVEFSSUEgREUgVFVSSVNNTxtTRUNSRVRBUklBIERFU0VOVi4gUkVHSU9OQUweU0VDUkVUQVJJQSBFTkVSR0lBIEUgTUlORVJBQ0FPHVNFQ1JFVEFSSUEgSU5GLiBNRUlPIEFNQklFTlRFHlNFQ1JFVEFSSUEgSlVTVElDQSBFIENJREFEQU5JQRxTRUNSRVRBUklBIFNFR1VSQU5DQSBQVUJMSUNBHVNVUEVSSU5ULkNPTlRSLkVOREVNSUFTLVNVQ0VOKFNVUEVSSU5URU5ERU5DSUEgREUgQ09OVFJPTEUgREUgRU5ERU1JQVMVWwItMQExATIBMwE0ATUBNgE3ATgBOQIxMAIxMQIxMgIxMwIxNAIxNQIxNgIxNwIxOAIxOQIyMAIyMQIyMgIyMwIyNAIyNQIyNgIyNwIyOAIyOQIzMAIzMQIzMgIzMwIzNAIzNQIzNgIzNwIzOAIzOQI0MAI0MQI0MgI0MwI0NAI0NQI0NgI0NwI0OAI0OQI1MAI1MQI1MgI1MwI1NAI1NQI1NgI1NwI1OAI1OQI2MAI2MQI2MgI2MwI2NAI2NQI2NgI2NwI2OAI2OQI3MAI3MQI3MgI3MwI3NAI3NQI3NgI3NwI3OAI3OQI4MAI4MQI4MgI4MwI4NAI4NQI4NgI4NwI4OAI4OQI5MBQrA1tnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnFgFmZAIHDxBkEBUBBVRPRE9TFQECLTEUKwMBZxYBZmQCCQ8QDxYGHwAFC1NJVFVBQ0FPX0lEHwEFDVNJVFVBQ0FPX0RFU0MfAmdkEBUEBVRPRE9TC0FQT1NFTlRBRE9TBkFUSVZPUwxQRU5TSU9OSVNUQVMVBAItMQExATIBMxQrAwRnZ2dnFgFmZAILDw9kFgIeCm9uS2V5UHJlc3MFJ3JldHVybiBNYXNjYXJhTW9lZGEodGhpcywnLicsJywnLGV2ZW50KWQCDQ8PZBYCHwMFJ3JldHVybiBNYXNjYXJhTW9lZGEodGhpcywnLicsJywnLGV2ZW50KWQCFQ9kFgJmD2QWBAIBDxYCHgdWaXNpYmxlaGQCAw8PFgIfBGhkFgICAw88KwARAgEQFgAWABYADBQrAABkGAIFHl9fQ29udHJvbHNSZXF1aXJlUG9zdEJhY2tLZXlfXxYBBQxpbWdFeHBvcnRUeHQFBGdyaWQPZ2RQPxWdkKW2N7k2sc3cRkrsKaN6oX%2FYV5km4LhQ5LBTcA%3D%3D&__VIEWSTATEGENERATOR=E42B1F40&__EVENTVALIDATION=%2FwEdAG7zLJ4CWjEZheF5kVSEbhUBha8fMqpdVfgdiIcywQp19AS0oC9%2BkRn5wokBQj%2BYmSdj%2FRE4%2FVY2xVooDbyNylWSFXsupcqZ9EYohXUHrvyuvszqcPgWZLCNPbx1As5K6XI8YfiXwzc6jdd6doCEWNMhfUq2YkY3rbVwieJI30sGRBiYwU43rbtypsxax6Lexvr9tn%2FppXosAOoaLiPglbLZDQ4AHCggkRiV1y9R5Jk3hxzIBiDVeBd4ex%2FDPERS7Y3hxS83fVJEzO6I%2BsKPdRPTZbKZKzZ%2FiI%2Fo2LERffiPWbY0qpjFHBt23vPUuehVkAOA1ngNB93rbK%2Bu0E54XcLAmWLN%2Fl%2Bz5m0ApRDNS4L3FwTfILDr1aT4Crd1%2F2X2tGTSlHv5v4gI%2B%2F4UxQdVOOXcJIWT3hhEHPLkfTczdhS%2BJPFzCLQyhLlM%2FTIkVLdCEWiXz8XDG1%2BqV0wHjm1sFCkHt5aLy6yjxTyv1FFML9B%2Fo0JBJO%2By%2B74vfDQlvwQWQHtswD%2Bjri2Ja0FbYTVaHetzL3nIpMtKnzHrJejZWNnngPadPS2744kvbqzTJQaAdqOeYy%2FXyO581zGaQB16a5HkpT5jddxT22MOtOJS9%2BOuUHRXp8dj268DwFDqeWohT0vm1b0FOlCVjyi8V9MKHPYPpHgZ%2F2GzcT5zaEXX3Wa7dGMCaXmo3KMrfSTIEMtzpixzPEyfillVBjlMq8fiaJmavKW63uZc65AHMJEgzJBWOOnY33pftn93IOwZzZWV8DBA7v%2F9aPpqFJWx65SrmQqSjTKR9Q8znWzwmOcZE4%2FSuTP7i%2BXb7NoOWr4anBMJ9L8iQIpPyUdRVhTh0dqpW9mg677VkTJzeFDr78YgZsAwP%2FX%2BdTV%2FINjSEi5I3GKGi7myZ7%2BjeKd7PDtAjn8O4hLTJfL4LFg4Nvwdmd%2F53R8Jw4b9e%2FlLobx4zXIq3GAuywAjOQvHY8AEnfNd%2FlXdKYxyzc%2FwfpCNJupjNVpUse2VJD4oS1BuBPCBdQ5aaErF4JFlItPtLQCYFzs0jfHra3vGXa5DUmVxUHX61STePVHIx%2Bb2IzWzaVJbMWnr0ySeyyy%2FZ1AEi%2FGyAY4VRi7gupaG4KIpRnL0PqiHkB0m%2BFOAGOzlYyAzkRO1hwDnOQf3fkyzTk8GPsW4ORs6zPd%2BeDosaOUhW1MEtWA%2BSqsohtmqkoKbjumKVbQvus3TM3adBbzpeRPEjnLNywu7OwRAhFtyU0gmtXU9am1kuUbvzTaW93G%2FXW5pJhxIEGLJ46ijUCocW5ypp1AUfwUVaLtxxktia9eKFUCg16rKs9CfE8mQS1sJL8sXrl1kCYgl357rWaG95jfZ509s%2Bm2fA%2BOt0aP8OyaOU4R1ht8FAaoUaukJi9ac%2B52YAhiIATqgCuAVAUaz6iVZ30v9i3l79pG%2FQjT0yzItrPhgpeaj5FDDRNwFWQfE5v7dhuWXa0fqNuT0%2F3rHd8yAI%2FR31smXtVMpuDg4uNPHIl%2B2FxKOozxg%2Fv%2B%2BE9d%2FZoPPgEhC0wqwEcy5cuqQMsS7I2iwe1Xfp9TBV2uBNFpR3V1ws1NcSb0O892YPaDPsxrja2GQM7SzAShZDNlCOSW7Tt%2Fu0g%2BeirEQ%2FlwLvd%2FyO3h%2FPXkp4oZAfoeCSWuKxs7UkSXX7piPjdZRkxS8%2B1Tv52TtsW%2F%2FarETeAIdqgWD21SCG%2F%2BSG%2FyFJtRwUalOOSCKwgXmjHLagrrOpyOVvrzcda9t4I8AvfZJNBX4HCyHl%2F8v7zlaXsN6v3xdx7SBYcgTu1GewkDpUJSUGbiJpTFb9FwFesoo5ATV8LN38tAuINPU8rfSikTUmdlp8CARYKFn95WsBdjs1x8c6lK59jnQ%2FQHi2nKDMKfdQRVhcvnFwvt6SokCFQDX7AEtmU9OC%2Fkwe5SIcBU04jVZdwLiKogB2pPql%2FnA4CHA7mEf3AIr0wLOnRAQ0xjhC3PXHrIjjpV2suu3zMJ7LscXSxIToHr95TxJTzSEj9C7XyN%2FGMISH%2FTKb%2FPRxrbwGTEZF3x922wvTvFKuuxNUJFB79U3ZPxLws5iIazIlee0zV3InWYYPP26JIa5R0Em8ORb%2B%2FoUDlJKcdv6NoWV%2F5WtCyREa2Rxke5ZukLmT7xiWinv8jrwbnAz1AUaMm8xKsc4G6dNWu2jHrgAaNFlmOLZIeG0OTsyPhh%2B%2F0WQdOTAD9zAblcx6VvMEe43r2g9sGn75bO7ZW6nZ7hGBjKUqSH4S7Qy5ngR%2FiduIfdzD0oNgNO6zlZmgx%2BPVHfpxvG%2B1lXBZBLAe6JyY9%2FwY3j6%2BMGuruxn5MX0jsPeyBXK401Kwjl8g4KbJ6y3JnlYwpVFE%2BxaAvUaNHQI16ZHBEZs26yaBXQzbLC2jFI6XXFnHVbAsVbJ&txtNome=&orgao=-1&cargo=-1&situacao=-1&txtDe=&txtAte=&hdInicio=&hdFinal=&hdPaginaAtual=&hdTotal=&imgExportTxt.x=15&imgExportTxt.y=22`)
+	body := strings.NewReader(`__EVENTTARGET=&__EVENTARGUMENT=&__LASTFOCUS=&__VIEWSTATE=%2FwEPDwULLTIwNDQzOTAyMzEPZBYCAgMPZBYMAgUPEA8WBh4ORGF0YVZhbHVlRmllbGQFCE9SR0FPX0lEHg1EYXRhVGV4dEZpZWxkBQpPUkdBT19ERVNDHgtfIURhdGFCb3VuZGdkEBVbBVRPRE9THUFETUlOSVNUUkFDQU8gR0VSQUwgRE8gRVNUQURPHUFHLk0uVi5QQVIuTElULk5PUlRFIEFHRU1WQUxFHEFHLlJFRy5TQU4uRU4uRVNULlNQLiBBUlNFU1AeQUcuUkVHLlNWLlAuREVMLlRSLkUuU1AgQVJURVNQHUFHRU5DSUEgTUVULkNBTVBJTkFTIEFHRU1DQU1QHkFHRU5DSUEgTUVUUk9QLkIuU0FOVElTVEEgQUdFTShBR0VOQ0lBIE1FVFJPUE9MSVRBTkEgREUgQ0FNUElOQVMgLSBBR0VNKEFHRU5DSUEgTUVUUk9QT0xJVEFOQSBERSBTT1JPQ0FCQSAtIEFHRU0eQy5FLkVELlRFQy5QQVVMQSBTT1VaQS1DRUVURVBTHUMuUC5UUkVOUyBNRVRST1BPTElUQU5PUy1DUFRNHUNBSVhBIEJFTkVGSUMuUE9MSUNJQSBNSUxJVEFSCkNBU0EgQ0lWSUwdQ0VURVNCLUNJQS5BTUJJRU5UQUwgRVNULlMuUC4aQ0lBIERFU0VOVi5BR1JJQy5TUCBDT0RBU1AdQ0lBLkRFUy5IQUIuVVJCLkVTVC5TLlAuLUNESFUeQ0lBLlBBVUxJUy5TRUNVUklUSVpBQ0FPLUNQU0VDHkNJQS5QUk9DLkRBRE9TIEVTVC5TLlAtUFJPREVTUChDSUEuU0FORUFNRU5UTyBCQVNJQ08gRVNULlMuUEFVTE8tU0FCRVNQHkNJQS5TRUdVUk9TIEVTVC5TLlBBVUxPLUNPU0VTUB1DT01QLk1FVFJPUE9MSVRBTk8gUy5QLi1NRVRSTx1DT01QQU5ISUEgRE9DQVMgU0FPIFNFQkFTVElBTyhDT01QQU5ISUEgUEFVTElTVEEgREUgT0JSQVMgRSBTRVJWSUNPUyAtBURBRVNQHURFUEFSVEFNLkVTVFJBREFTIFJPREFHRU0gREVSKERFUEFSVEFNRU5UTyBBR1VBUyBFTkVSR0lBIEVMRVRSSUNBLURBRUUoREVQQVJUQU1FTlRPIEVTVEFEVUFMIERFIFRSQU5TSVRPLURFVFJBTh5ERVBUTy4gRVNULiBUUkFOU0lUTyBERVRSQU4gU1AeREVTRU5WT0xWLlJPRE9WSUFSSU8gUy9BLURFUlNBKERFU0VOVk9MVkUgU1AgQUdFTkNJQSBERSBGT01FTlRPIERPIEVTVEEoRU1BRS1FTVBSRVNBIE1FVFJPUE9MSVRBTkEgREUgQUdVQVMgRSBFTh5FTVAuTUVUUi5UUi5VUkIuU1AuUy9BLUVNVFUtU1AoRU1QLlBBVUxJU1RBIFBMQU5FSi5NRVRST1BMSVRBTk8gUy5BLUVNUBpGQUMuTUVELlMuSi5SLlBSRVRPLUZBTUVSUBtGQUMuTUVESUNJTkEgTUFSSUxJQS1GQU1FTUEaRklURVNQLUpPU0UgR09NRVMgREEgU0lMVkEeRlVORC5BTVBBUk8gUEVTUS5FU1QuU1AtRkFQRVNQHkZVTkQuQ09OUy5QUk9ELkZMT1JFU1RBTCBFLlNQLhxGVU5ELk1FTU9SSUFMIEFNRVJJQ0EgTEFUSU5BHUZVTkQuUEFSUVVFIFpPT0xPR0lDTyBTLlBBVUxPHkZVTkQuUEUuQU5DSElFVEEtQy5QLlJBRElPIFRWLh1GVU5ELlBGLkRSLk0uUC5QSU1FTlRFTC1GVU5BUB5GVU5ELlBSRVYuQ09NUEwuRVNULlNQIFBSRVZDT00eRlVORC5QUk8tU0FOR1VFLUhFTU9DRU5UUk8gUy5QHEZVTkQuUkVNLlBPUC4gQy5ULkxJTUEgLUZVUlAeRlVORC5TSVNULkVTVC5BTkFMLkRBRE9TLVNFQURFHkZVTkQuVU4uVklSVFVBTCBFU1QuU1AgVU5JVkVTUBFGVU5EQUNBTyBDQVNBLVNQLhxGVU5EQUNBTyBERVNFTlYuRURVQ0FDQU8tRkRFHUZVTkRBQ0FPIE9OQ09DRU5UUk8gU0FPIFBBVUxPD0ZVTkRBQ0FPIFBST0NPThZHQUJJTkVURSBETyBHT1ZFUk5BRE9SGkguQy5GQUMuTUVELkJPVFVDQVRVLUhDRk1CHUhDIEZBQyBNRURJQ0lOQSBSSUIgUFJFVE8gVVNQGUhPU1AuQ0xJTi5GQUMuTUVELk1BUklMSUEdSE9TUC5DTElOLkZBQy5NRUQuVVNQLUhDRk1VU1AeSU1QUi5PRklDSUFMIEVTVEFETyBTLkEuIElNRVNQHklOU1QgTUVEIFNPQyBDUklNSU5PIFNQLSBJTUVTQx5JTlNULkFTLk1FRC5TRVJWLlAuRVNULiBJQU1TUEUeSU5TVC5QQUdUT1MuRVNQRUNJQUlTIFNQLUlQRVNQHklOU1QuUEVTT1MgTUVESUQuRS5TLlAtSVBFTS9TUB5JTlNULlBFU1EuVEVDTk9MT0dJQ0FTIEVTVC5TLlAdSlVOVEEgQ09NRVJDLkUuUy5QQVVMTy1KVUNFU1AeUEFVTElTVFVSIFNBLkVNUFIuVFVSLkVTVC5TLlAuGVBPTElDSUEgTUlMSVRBUiBTQU8gUEFVTE8cUFJPQ1VSQURPUklBIEdFUkFMIERPIEVTVEFETx5TQU8gUEFVTE8gUFJFVklERU5DSUEgLSBTUFBSRVYeU0VDLlRSQU5TUE9SVEVTIE1FVFJPUE9MSVRBTk9THlNFQ1IuQUdSSUNVTFRVUkEgQUJBU1RFQ0lNRU5UTx5TRUNSLkNVTFRVUkEgRUNPTk9NSUEgQ1JJQVRJVkEeU0VDUi5ERVNFTlZPTFZJTUVOVE8gRUNPTk9NSUNPHlNFQ1IuRVNULkRJUi5QRVMuQy9ERUZJQ0lFTkNJQR5TRUNSRVQgREUgUkVMQUNPRVMgRE8gVFJBQkFMSE8eU0VDUkVULkFETUlOSVNUUi5QRU5JVEVOQ0lBUklBHlNFQ1JFVC5TQU5FQU1FTlRPIFJFQy5ISURSSUNPUx1TRUNSRVRBUi5GQVpFTkRBIFBMQU5FSkFNRU5UTxZTRUNSRVRBUklBIERBIEVEVUNBQ0FPF1NFQ1JFVEFSSUEgREEgSEFCSVRBQ0FPE1NFQ1JFVEFSSUEgREEgU0FVREUdU0VDUkVUQVJJQSBERSBERVNFTlZPTFZJTUVOVE8WU0VDUkVUQVJJQSBERSBFU1BPUlRFUxVTRUNSRVRBUklBIERFIEdPVkVSTk8eU0VDUkVUQVJJQSBERSBMT0dJU1RJQ0EgRSBUUkFOFVNFQ1JFVEFSSUEgREUgVFVSSVNNTxtTRUNSRVRBUklBIERFU0VOVi4gUkVHSU9OQUweU0VDUkVUQVJJQSBFTkVSR0lBIEUgTUlORVJBQ0FPHVNFQ1JFVEFSSUEgSU5GLiBNRUlPIEFNQklFTlRFHlNFQ1JFVEFSSUEgSlVTVElDQSBFIENJREFEQU5JQRxTRUNSRVRBUklBIFNFR1VSQU5DQSBQVUJMSUNBHVNVUEVSSU5ULkNPTlRSLkVOREVNSUFTLVNVQ0VOKFNVUEVSSU5URU5ERU5DSUEgREUgQ09OVFJPTEUgREUgRU5ERU1JQVMVWwItMQExATIBMwE0ATUBNgE3ATgBOQIxMAIxMQIxMgIxMwIxNAIxNQIxNgIxNwIxOAIxOQIyMAIyMQIyMgIyMwIyNAIyNQIyNgIyNwIyOAIyOQIzMAIzMQIzMgIzMwIzNAIzNQIzNgIzNwIzOAIzOQI0MAI0MQI0MgI0MwI0NAI0NQI0NgI0NwI0OAI0OQI1MAI1MQI1MgI1MwI1NAI1NQI1NgI1NwI1OAI1OQI2MAI2MQI2MgI2MwI2NAI2NQI2NgI2NwI2OAI2OQI3MAI3MQI3MgI3MwI3NAI3NQI3NgI3NwI3OAI3OQI4MAI4MQI4MgI4MwI4NAI4NQI4NgI4NwI4OAI4OQI5MBQrA1tnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnFgFmZAIHDxBkEBUBBVRPRE9TFQECLTEUKwMBZxYBZmQCCQ8QDxYGHwAFC1NJVFVBQ0FPX0lEHwEFDVNJVFVBQ0FPX0RFU0MfAmdkEBUEBVRPRE9TC0FQT1NFTlRBRE9TBkFUSVZPUwxQRU5TSU9OSVNUQVMVBAItMQExATIBMxQrAwRnZ2dnFgFmZAILDw9kFgIeCm9uS2V5UHJlc3MFJ3JldHVybiBNYXNjYXJhTW9lZGEodGhpcywnLicsJywnLGV2ZW50KWQCDQ8PZBYCHwMFJ3JldHVybiBNYXNjYXJhTW9lZGEodGhpcywnLicsJywnLGV2ZW50KWQCFQ9kFgJmD2QWBAIBDxYCHgdWaXNpYmxlaGQCAw8PFgIfBGhkFgICAw88KwARAgEQFgAWABYADBQrAABkGAIFHl9fQ29udHJvbHNSZXF1aXJlUG9zdEJhY2tLZXlfXxYBBQxpbWdFeHBvcnRUeHQFBGdyaWQPZ2RQPxWdkKW2N7k2sc3cRkrsKaN6oX%2FYV5km4LhQ5LBTcA%3D%3D&__VIEWSTATEGENERATOR=E42B1F40&__EVENTVALIDATION=%2FwEdAG7zLJ4CWjEZheF5kVSEbhUBha8fMqpdVfgdiIcywQp19AS0oC9%2BkRn5wokBQj%2BYmSdj%2FRE4%2FVY2xVooDbyNylWSFXsupcqZ9EYohXUHrvyuvszqcPgWZLCNPbx1As5K6XI8YfiXwzc6jdd6doCEWNMhfUq2YkY3rbVwieJI30sGRBiYwU43rbtypsxax6Lexvr9tn%2FppXosAOoaLiPglbLZDQ4AHCggkRiV1y9R5Jk3hxzIBiDVeBd4ex%2FDPERS7Y3hxS83fVJEzO6I%2BsKPdRPTZbKZKzZ%2FiI%2Fo2LERffiPWbY0qpjFHBt23vPUuehVkAOA1ngNB93rbK%2Bu0E54XcLAmWLN%2Fl%2Bz5m0ApRDNS4L3FwTfILDr1aT4Crd1%2F2X2tGTSlHv5v4gI%2B%2F4UxQdVOOXcJIWT3hhEHPLkfTczdhS%2BJPFzCLQyhLlM%2FTIkVLdCEWiXz8XDG1%2BqV0wHjm1sFCkHt5aLy6yjxTyv1FFML9B%2Fo0JBJO%2By%2B74vfDQlvwQWQHtswD%2Bjri2Ja0FbYTVaHetzL3nIpMtKnzHrJejZWNnngPadPS2744kvbqzTJQaAdqOeYy%2FXyO581zGaQB16a5HkpT5jddxT22MOtOJS9%2BOuUHRXp8dj268DwFDqeWohT0vm1b0FOlCVjyi8V9MKHPYPpHgZ%2F2GzcT5zaEXX3Wa7dGMCaXmo3KMrfSTIEMtzpixzPEyfillVBjlMq8fiaJmavKW63uZc65AHMJEgzJBWOOnY33pftn93IOwZzZWV8DBA7v%2F9aPpqFJWx65SrmQqSjTKR9Q8znWzwmOcZE4%2FSuTP7i%2BXb7NoOWr4anBMJ9L8iQIpPyUdRVhTh0dqpW9mg677VkTJzeFDr78YgZsAwP%2FX%2BdTV%2FINjSEi5I3GKGi7myZ7%2BjeKd7PDtAjn8O4hLTJfL4LFg4Nvwdmd%2F53R8Jw4b9e%2FlLobx4zXIq3GAuywAjOQvHY8AEnfNd%2FlXdKYxyzc%2FwfpCNJupjNVpUse2VJD4oS1BuBPCBdQ5aaErF4JFlItPtLQCYFzs0jfHra3vGXa5DUmVxUHX61STePVHIx%2Bb2IzWzaVJbMWnr0ySeyyy%2FZ1AEi%2FGyAY4VRi7gupaG4KIpRnL0PqiHkB0m%2BFOAGOzlYyAzkRO1hwDnOQf3fkyzTk8GPsW4ORs6zPd%2BeDosaOUhW1MEtWA%2BSqsohtmqkoKbjumKVbQvus3TM3adBbzpeRPEjnLNywu7OwRAhFtyU0gmtXU9am1kuUbvzTaW93G%2FXW5pJhxIEGLJ46ijUCocW5ypp1AUfwUVaLtxxktia9eKFUCg16rKs9CfE8mQS1sJL8sXrl1kCYgl357rWaG95jfZ509s%2Bm2fA%2BOt0aP8OyaOU4R1ht8FAaoUaukJi9ac%2B52YAhiIATqgCuAVAUaz6iVZ30v9i3l79pG%2FQjT0yzItrPhgpeaj5FDDRNwFWQfE5v7dhuWXa0fqNuT0%2F3rHd8yAI%2FR31smXtVMpuDg4uNPHIl%2B2FxKOozxg%2Fv%2B%2BE9d%2FZoPPgEhC0wqwEcy5cuqQMsS7I2iwe1Xfp9TBV2uBNFpR3V1ws1NcSb0O892YPaDPsxrja2GQM7SzAShZDNlCOSW7Tt%2Fu0g%2BeirEQ%2FlwLvd%2FyO3h%2FPXkp4oZAfoeCSWuKxs7UkSXX7piPjdZRkxS8%2B1Tv52TtsW%2F%2FarETeAIdqgWD21SCG%2F%2BSG%2FyFJtRwUalOOSCKwgXmjHLagrrOpyOVvrzcda9t4I8AvfZJNBX4HCyHl%2F8v7zlaXsN6v3xdx7SBYcgTu1GewkDpUJSUGbiJpTFb9FwFesoo5ATV8LN38tAuINPU8rfSikTUmdlp8CARYKFn95WsBdjs1x8c6lK59jnQ%2FQHi2nKDMKfdQRVhcvnFwvt6SokCFQDX7AEtmU9OC%2Fkwe5SIcBU04jVZdwLiKogB2pPql%2FnA4CHA7mEf3AIr0wLOnRAQ0xjhC3PXHrIjjpV2suu3zMJ7LscXSxIToHr95TxJTzSEj9C7XyN%2FGMISH%2FTKb%2FPRxrbwGTEZF3x922wvTvFKuuxNUJFB79U3ZPxLws5iIazIlee0zV3InWYYPP26JIa5R0Em8ORb%2B%2FoUDlJKcdv6NoWV%2F5WtCyREa2Rxke5ZukLmT7xiWinv8jrwbnAz1AUaMm8xKsc4G6dNWu2jHrgAaNFlmOLZIeG0OTsyPhh%2B%2F0WQdOTAD9zAblcx6VvMEe43r2g9sGn75bO7ZW6nZ7hGBjKUqSH4S7Qy5ngR%2FiduIfdzD0oNgNO6zlZmgx%2BPVHfpxvG%2B1lXBZBLAe6JyY9%2FwY3j6%2BMGuruxn5MX0jsPeyBXK401Kwjl8g4KbJ6y3JnlYwpVFE%2BxaAvUaNHQI16ZHBEZs26yaBXQzbLC2jFI6XXFnHVbAsVbJ&txtNome=&Place=-1&Position=-1&situacao=-1&txtDe=&txtAte=&hdInicio=&hdFinal=&hdPaginaAtual=&hdTotal=&imgExportTxt.x=15&imgExportTxt.y=22`)
 	req, err := http.NewRequest("POST", "http://www.transparencia.sp.gov.br/PortalTransparencia-Report/Remuneracao.aspx", body)
 	if err != nil {
 		return err
@@ -74,8 +77,13 @@ func baixarCSV() error {
 		return err
 	}
 
-	// Remove arquivo
-	err = os.Remove(newFile)
+	log.Println(newFile, filepath)
+	// Remove arquivos
+	err = os.Remove(newFile) //
+	if err != nil {
+		return err
+	}
+	err = os.Remove(filepath)
 	if err != nil {
 		return err
 	}
@@ -119,10 +127,10 @@ func importCSV(src string) error {
 	}
 	defer db.Close()
 
-	log.Println("Limpando tabela funcionarios_publicos")
+	log.Println("Limpando tabela public_agent")
 
 	// Limpa a tabela
-	sql := "delete from funcionarios_publicos"
+	sql := "delete from public_agent"
 	_, err = db.Exec(sql)
 	if err != nil {
 		return err
@@ -166,27 +174,27 @@ func importCSV(src string) error {
 
 		// Objeto temporario
 		fTemp := FuncPublico{
-			Nome:      reg.ReplaceAllString(record[0], ""),
-			Cargo:     reg.ReplaceAllString(record[1], ""),
-			Orgao:     reg.ReplaceAllString(record[2], ""),
-			VlSalario: salario}
+			Name:     reg.ReplaceAllString(record[0], ""),
+			Position: reg.ReplaceAllString(record[1], ""),
+			Place:    reg.ReplaceAllString(record[2], ""),
+			Salary:   salario}
 
 		// Insert na tabela, se tiver conflito não faz nada
-		sql := "insert into funcionarios_publicos as v (nm_funcionarios, nm_cargo, place, vl_salario) values ($1, $2, $3, $4) ON CONFLICT ON CONSTRAINT funcionarios_publicos_pkey DO nothing"
-		_, err = trc.Exec(sql, fTemp.Nome, fTemp.Cargo, fTemp.Orgao, fTemp.VlSalario)
+		sql := "insert into public_agent as v (name, position, place, salary) values ($1, $2, $3, $4) ON CONFLICT ON CONSTRAINT public_agent_pkey DO nothing"
+		_, err = trc.Exec(sql, fTemp.Name, fTemp.Position, fTemp.Place, fTemp.Salary)
 		if err != nil {
 			trc.Rollback()
 			return err
 		}
 
-		updateSQL := `UPDATE clients a
-			set a.salary = $1,
-				a.positicon = $2,
-				a.place = $3,
-				a.is_special = true
-			where a.name = $4`
+		updateSQL := `UPDATE clients 
+			set salary = $1,
+				position = $2,
+				place = $3,
+				is_special = true
+			where name = $4`
 
-		_, err = trc.Exec(updateSQL, fTemp.VlSalario, fTemp.Cargo, fTemp.Orgao, fTemp.Nome)
+		_, err = trc.Exec(updateSQL, fTemp.Salary, fTemp.Position, fTemp.Place, fTemp.Name)
 		if err != nil {
 			trc.Rollback()
 			return err
@@ -199,8 +207,15 @@ func importCSV(src string) error {
 	return err
 }
 
-// Cria os eventos
-func createEvents() error {
+// Função responsável pelo envio de e-mail/notificação dos Leads
+// Cria um arquivo CSV com os funcionários publicos que recebem
+// mais de 20mil e não são clientes do banco.
+// Envia o e-mail para todos os Users
+func createEvents(option string) error {
+	log.Println("Iniciando createEvents")
+
+	fileName := "Leads.csv"
+
 	log.Println("Abrindo conexão com o banco")
 	db, err := initDB()
 	if err != nil {
@@ -208,40 +223,157 @@ func createEvents() error {
 	}
 	defer db.Close()
 
-	sql := `select a.nm_funcionarios, a.nm_cargo, a.place, a.vl_salario
-			from funcionarios_publicos a
-			where a.vl_salario >= 20000 and not exists (select 1 from clients b where b.name = a.nm_funcionarios`
+	// Cria arquivo CSV com os leads
+	qtdLeads, err := createCSVLeads(db, fileName, option)
+
+	// Abre transação
+	trc, _ := db.Begin()
+	log.Println("Abrindo transação")
+
+	// Pega o id do novo evento
+	seq, err := nextSeq(db, "events", "id")
+	if err != nil {
+		trc.Rollback()
+		return err
+	}
+
+	log.Println("Registrando evento")
+
+	// Cria evento
+	sql := `insert into events (id, qt_leads, created_on) values ($1, $2, now())`
+
+	_, err = trc.Exec(sql, seq, qtdLeads)
+	if err != nil {
+		trc.Rollback()
+		return err
+	}
+
+	log.Println("Registrando leads")
+
+	// Registra os leads no evento
+	sql = `insert into events_leads (id, name, event_id, created_on)
+			select nextval(pg_get_serial_sequence('events_leads', 'id')),
+				a.name,
+				$1,
+				now()
+			from public_agent a
+			where a.salary >= 20000 and not exists (select 1 from clients b where b.name = a.name)`
+
+	_, err = trc.Exec(sql, seq)
+	if err != nil {
+		trc.Rollback()
+		return err
+	}
+
+	log.Println("Commitando transação")
+	trc.Commit()
+
+	// Envia e-mail para os usuários registrados, com o arquivo em anexo
+	err = sentEmailUsers(db, fileName)
+	handleError(err)
+
+	log.Println("Apagando arquivo")
+	err = os.Remove(fileName)
+	handleError(err)
+
+	sql = `Insert into events_to (id, events_id, user_id, sent_at)
+			select nextval(pg_get_serial_sequence('events_to', 'id')),
+				$1,
+				a.id,
+				now()
+			from users a`
+	_, err = db.Exec(sql, seq)
+	handleError(err)
+
+	return err
+}
+
+func schedulerAgents() {
+	err := baixarCSV()
+	handleError(err)
+	err = createEvents("full")
+	handleError(err)
+}
+
+// Função auxiliar que envia o e-mail
+func sentEmailUsers(db *sql.DB, attachment string) error {
+	log.Println("Montando e-mail")
+	m := email.NewMessage("Leads", "Prezados, segue em anexo os leads da semana")
+	m.From = mail.Address{Name: "From Banco Uati", Address: "vani.gabr@gmail.com"}
+
+	emails, err := emailUsers(db)
+	//emails = append(emails, "gabriel.vani@hospitalbaiasul.com.br")
+	//emails = append(emails, "rafa.pgcavalcante@gmail.com")
+	m.To = emails
+
+	log.Println("Anexando arquivo")
+	// add attachments
+	if err = m.Attach(attachment); err != nil {
+		return err
+	}
+
+	log.Println("Enviando e-mail")
+	// send it
+	auth := smtp.PlainAuth("", os.Getenv("email"), os.Getenv("senha"), os.Getenv("host"))
+	if err := email.Send(os.Getenv("hostfull"), auth, m); err != nil {
+		return err
+	}
+	log.Println("E-mail enviado com sucesso")
+
+	return nil
+}
+
+// Função auxiliar que cria CSV, caso option seja igual à not_full, ele só vai enviar os leads
+// que não tiveram e-mail enviado na ultima semana
+func createCSVLeads(db *sql.DB, fileName string, option string) (int, error) {
+
+	sql := `select a.name, a.position, coalesce(a.place, 'N/I'), a.salary
+	from public_agent a
+	where a.salary >= 20000 and not exists (select 1 from clients b where b.name = a.name)`
+
+	if option == "not_full" {
+		sql = sql + `and not exists (select 1 from events_to c where c.name = a.name and c.created_on between (now() - interval '7 DAY') and now())`
+	}
+	//and $1 = '' or`
 
 	rows, err := db.Query(sql)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer rows.Close()
 
+	log.Println("Criando cSV")
 	// Cria CSV
-	csvfile, err := os.Create("test.csv")
+	csvfile, err := os.Create(fileName)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer csvfile.Close()
 
 	csvwriter := csv.NewWriter(csvfile)
+	// Cabeçalho
+	_ = csvwriter.Write([]string{"Nome", "Cargo", "Organização", "Salário"})
 
+	qtdLeads := 0
+
+	log.Println("Registrando leads no arquivo")
+	// Recupera dados do banco e cria CSV
 	for rows.Next() {
+		//Qtd de linhas
+		qtdLeads++
 
-		funcp := new(FuncPublico)
-		rows.Scan(&funcp.Nome, &funcp.Cargo, &funcp.Orgao, &funcp.VlSalario)
+		var funcp FuncPublico
+
+		rows.Scan(&funcp.Name, &funcp.Position, &funcp.Place, &funcp.Salary)
 
 		// Cria linha
-		row := []string{funcp.Nome, funcp.Cargo, funcp.Orgao, fmt.Sprintf("%f", funcp.VlSalario)}
+		row := []string{funcp.Name, funcp.Position, funcp.Place, fmt.Sprintf("%f", funcp.Salary)}
 		_ = csvwriter.Write(row)
 
 	}
+	// Finzaliza arquivo
 	csvwriter.Flush()
-
-	return err
-
-	//return nil
+	return qtdLeads, nil
 }
 
 // Função para lidar com o erro
@@ -251,6 +383,26 @@ func handleError(err error) {
 	}
 }
 
+// Função auxiliar que retorna os e-mails dos users
+func emailUsers(db *sql.DB) ([]string, error) {
+	var emails []string
+
+	sql := `select email from users`
+
+	rows, err := db.Query(sql)
+	if err != nil {
+		return emails, err
+	}
+	for rows.Next() {
+		var email string
+		rows.Scan(&email)
+		emails = append(emails, email)
+	}
+
+	return emails, nil
+}
+
+// Função auxiliar que retorna verdadeiro ou falso para o select enviado
 func rowExists(query string, db *sql.DB, args ...interface{}) bool {
 	var exists bool
 	query = fmt.Sprintf("SELECT exists (%s)", query)
@@ -259,4 +411,22 @@ func rowExists(query string, db *sql.DB, args ...interface{}) bool {
 		fmt.Printf("ERRO checando se existe '%s' %v", args, err)
 	}
 	return exists
+}
+
+// Função auxiliar que pega o próximo valor de ID da tabela <table>
+func nextSeq(db *sql.DB, table string, column string) (int, error) {
+	// Pega o próximo ID da tabela, recebe a conexão do banco, a tabela e o campo que é a ID
+	sql := `SELECT nextval(pg_get_serial_sequence('` + table + `', '` + column + `'));`
+
+	row, err := db.Query(sql)
+	if err != nil {
+		return 0, err
+	}
+	var seq int
+	row.Next()
+
+	row.Scan(&seq)
+
+	return seq, nil
+
 }

@@ -28,10 +28,10 @@ type PF struct {
 
 // FuncPublico guarda o funcionario antes de importar para o banco
 type FuncPublico struct {
-	Nome      string
-	Cargo     string
-	Orgao     string
-	VlSalario float64
+	Name     string
+	Position string
+	Place    string
+	Salary   float64
 }
 
 // User guarda o usuário antes de importar para o banco

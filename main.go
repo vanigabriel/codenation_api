@@ -8,11 +8,11 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 
 	//_ "./docs/docs.go" // For gin-swagger
 
 	"github.com/gin-gonic/gin"
+	"github.com/jasonlvhit/gocron"
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 
@@ -53,29 +53,6 @@ func setupRouter() *gin.Engine {
 			Ao fim da importação do csv, ele irá fazer um join com a tabela de clientes, vendo quem ainda não é cliente e ganha +20mil
 			com o resultado, ele irá inserir na tabela de eventos os que não tiveram e-mail enviado a mais de 15 dias
 
-			SELECT currval(pg_get_serial_sequence('fruits', 'id'));
-
-			create table events {
-				id serial primary key,
-				qt_leads integer,
-				created_on timestamp
-			}
-
-			create table events_to {
-				id serial primary key,
-				events_id integer references events (id) not null
-				user_id integer references users (id) not null,
-				sent_at timestamp
-			}
-
-			CREATE TABLE events_leads {
-				id serial primary key,
-				name VARCHAR(150) NOT NULL,
-				event_id integer references events (id) ,
-				CREATED_ON TIMESTAMP NOT NULL
-			}
-
-
 	*/
 
 	// Funcionarios publicos dos ultimos meses
@@ -97,19 +74,13 @@ func main() {
 	log.SetOutput(wrt)
 	defer logFile.Close()
 
-	// A cada 24hrs ele vai disparar a função que baixa e importa o CSV dos funcionários publicos de SP
-	ticker := time.NewTicker(24 * time.Hour)
-	go func() {
-		// Realiza uma execução antes de começar o contador
-		baixarCSV()
-		for range ticker.C {
-			baixarCSV()
-		}
-	}()
+	// Toda segunda às 07:30 ele vai disparar a função que baixa e importa o CSV dos funcionários publicos de SP
+	gocron.Every(1).Monday().At("07:30").Do(schedulerAgents)
+	<-gocron.Start()
 
-	r := setupRouter()
+	//r := setupRouter()
 	// Listen and Server in 0.0.0.0:8080
-	r.Run(":8080")
+	//r.Run(":8080")
 
 }
 
