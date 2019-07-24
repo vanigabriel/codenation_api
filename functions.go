@@ -59,7 +59,6 @@ func baixarCSV() error {
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 
 	log.Println("Salvando localmente")
 	// Escreve o CSV no arquivo
@@ -86,6 +85,7 @@ func baixarCSV() error {
 	if err != nil {
 		return err
 	}
+	out.Close()
 	err = os.Remove(filepath)
 	if err != nil {
 		return err

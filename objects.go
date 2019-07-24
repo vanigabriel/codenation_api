@@ -18,6 +18,7 @@ const (
 )
 
 var lockAgents = 'N'
+
 var wg sync.WaitGroup
 
 // Nome do arquivo de log

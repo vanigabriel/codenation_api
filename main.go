@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"database/sql"
 	"encoding/csv"
+
+	//"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -84,13 +86,15 @@ func main() {
 	err := createDB()
 	handleError(err)
 
+	s := gocron.NewScheduler()
 	// Toda segunda às 07:30 ele vai disparar a função que baixa e importa o CSV dos funcionários publicos de SP
-	gocron.Every(1).Monday().At("07:30").Do(schedulerAgents)
-	<-gocron.Start()
+	s.Every(1).Monday().At("07:30").Do(schedulerAgents)
+	s.Start()
 
 	r := setupRouter()
 
 	r.Run(":" + os.Getenv("port"))
+
 	//err = importCSVMultiThread("remuneracao.csv")
 	//handleError(err)
 
@@ -670,7 +674,7 @@ func updatePublicAgents(c *gin.Context) {
 		go func() {
 			err := baixarCSV()
 			if err != nil {
-				log.Panicln(err)
+				log.Println(err)
 				return
 			}
 
