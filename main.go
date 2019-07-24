@@ -54,8 +54,7 @@ func setupRouter() *gin.Engine {
 			Importa csv -> valida cliente
 
 			Ao fim da importação do csv, ele irá fazer um join com a tabela de clientes, vendo quem ainda não é cliente e ganha +20mil
-			com o resultado, ele irá inserir na tabela de eventos os que não tiveram e-mail enviado a mais de 15 dias
-
+			com o resultado, ele irá inserir na tabela de eventos os que não tiveram e-mail enviado a mais de 7 dias
 	*/
 
 	// Funcionarios publicos dos ultimos meses
@@ -82,8 +81,8 @@ func main() {
 	//<-gocron.Start()
 
 	r := setupRouter()
-	// Listen and Server in 0.0.0.0:8080
-	r.Run(":8080")
+
+	r.Run(":" + os.Getenv("port"))
 
 }
 
@@ -136,22 +135,27 @@ func registerUser(c *gin.Context) {
 
 // Login recebe um JSON com o usuario e senha do banco e valida os mesmos
 func Login(c *gin.Context) {
+	log.Println("Iniciando login")
 	creds := &Credentials{}
 	c.BindJSON(&creds)
 
 	// Valida se a msg está correta
 	if creds.Username == "" || creds.Password == "" {
+		log.Println("Dados obrigatórios não recebidos")
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Dados obrigatórios não recebidos"})
 		return
 	}
 
 	db, err := initDB()
 	if err != nil {
+		log.Println("Erro ao iniciar o banco")
+		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 		return
 	}
 	defer db.Close()
 
+	log.Println("Consulta no banco de dados")
 	// Recupera senha
 	row := db.QueryRow("SELECT password FROM administrators WHERE username=$1", creds.Username)
 
@@ -159,27 +163,34 @@ func Login(c *gin.Context) {
 	err = row.Scan(&storedCreds.Password) // guardando a passw para comparar
 	if err != nil {
 		if err == sql.ErrNoRows {
+			log.Println("Usuário não encontrado")
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "usuário não encontrado."})
 			return
 		}
+		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 		return
 	}
 
+	log.Println("Comparando senha")
 	// Criptografa a senha informada e compara com a do banco
 	err = bcrypt.CompareHashAndPassword([]byte(storedCreds.Password), []byte(creds.Password))
 
 	if err != nil {
+		log.Println("Senha incorreta")
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Senha incorreta"})
 		return
 	}
 
+	log.Println("Autenticado")
 	//se passou, passamos o usuario e senha
 	c.JSON(http.StatusOK, gin.H{"user": "admin", "pass": "admin"})
 }
 
 // Registra administrador
 func registerAdministrator(c *gin.Context) {
+	log.Println("Iniciando registerAdministrator")
+
 	creds := &Credentials{}
 	c.BindJSON(&creds)
 
@@ -201,20 +212,26 @@ func registerAdministrator(c *gin.Context) {
 
 // Recupera usuários que receberão os e-mails
 func getUsers(c *gin.Context) {
+	log.Println("Iniciando getUsers")
+
 	db, err := initDB()
 	if err != nil {
+		log.Println("Erro ao iniciar o banco de dados")
+		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 		return
 	}
 	defer db.Close()
 
+	log.Println("Consultando usuários")
 	rows, err := db.Query("SELECT id, name, email FROM users where is_active IS DISTINCT FROM 'N' ORDER BY name")
-	defer rows.Close()
-
 	if err != nil {
+		log.Println("Erro ao consultar")
+		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 		return
 	}
+	defer rows.Close()
 
 	usrs := []User{}
 
@@ -223,25 +240,35 @@ func getUsers(c *gin.Context) {
 		rows.Scan(&usr.ID, &usr.Name, &usr.Email)
 		usrs = append(usrs, *usr)
 	}
+
+	log.Println("Consulta finalizando, retornando")
+
 	c.JSON(http.StatusOK, usrs)
 }
 
 // Recupera os clientes
 func getClientes(c *gin.Context) {
+	log.Println("Iniciando getClients")
+
 	db, err := initDB()
 	if err != nil {
+		log.Println("Erro ao abrir conexão com o banco de dados")
+		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 		return
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT id, name, salary, position, place, case when is_special = True then 'yes' else 'no' end as is_special FROM clients ORDER BY name")
-	defer rows.Close()
+	log.Println("Consultando clientes")
 
+	rows, err := db.Query("SELECT id, name, salary, position, place, case when is_special = True then 'yes' else 'no' end as is_special FROM clients ORDER BY name")
 	if err != nil {
+		log.Println("Erro ao consultar")
+		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
 		return
 	}
+	defer rows.Close()
 
 	clients := []Clientes{}
 
@@ -250,6 +277,9 @@ func getClientes(c *gin.Context) {
 		rows.Scan(&client.ID, &client.Name, &client.Salary, &client.Position, &client.Place, &client.IsClient)
 		clients = append(clients, *client)
 	}
+
+	log.Println("Retornando clientes")
+
 	c.JSON(http.StatusOK, clients)
 }
 
@@ -321,7 +351,7 @@ func uploadCliente(c *gin.Context) {
 					b.place,
 					b.salary,
 					b.id_lote,
-					case when b."name" is not null then true 
+					case when b.salary >= 20000  then true 
 					else false
 					end,
 					now()
