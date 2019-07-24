@@ -75,7 +75,7 @@ func baixarCSV() error {
 	}
 
 	// Importa para o banco
-	err = importCSV(newFile)
+	err = importCSVMultiThread(newFile)
 	if err != nil {
 		return err
 	}
@@ -188,7 +188,7 @@ func importCSV(src string) error {
 			Salary:   salario}
 
 		// Insert na tabela, se tiver conflito não faz nada
-		sql := "insert into public_agent as v (name, position, place, salary, id, lote_id) values ($1, $2, $3, $4, $5) ON CONFLICT ON CONSTRAINT public_agent_pkey DO nothing"
+		sql := "insert into public_agent as v (name, position, place, salary, id_lote) values ($1, $2, $3, $4, $5) ON CONFLICT ON CONSTRAINT public_agent_pkey DO nothing"
 		_, err = trc.Exec(sql, fTemp.Name, fTemp.Position, fTemp.Place, fTemp.Salary, seq)
 		if err != nil {
 			trc.Rollback()
@@ -214,6 +214,124 @@ func importCSV(src string) error {
 	log.Println("Commit efetuado")
 
 	return err
+}
+
+// Importa CSV multithread
+func importCSVMultiThread(src string) error {
+
+	log.Println("Abrindo conexão com o banco para importar")
+	db, err := initDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	log.Println("Limpando tabela public_agent")
+
+	// Limpa a tabela
+	sql := "delete from public_agent"
+	_, err = db.Exec(sql)
+	if err != nil {
+		return err
+	}
+
+	seq, err := nextSeqSequence(db, "lote_agent")
+	if err != nil {
+		return err
+	}
+
+	// Abrindo arquivo
+	f, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	log.Println("Iniciando leitura do arquivo")
+	// Inicia leitura do CSV
+	r := csv.NewReader(bufio.NewReader(f))
+	r.Comma = ';' //altera separador
+
+	r.Read() //retira cabeçalho
+
+	result, _ := r.ReadAll()
+
+	log.Println(len(result))
+
+	for i := 0; i < len(result); i += 100000 {
+		resultSplit := result[i:min(i+100000, len(result))]
+		wg.Add(1)
+		go insertMultiThread(db, resultSplit, seq)
+	}
+
+	log.Println("Aguardando")
+	wg.Wait()
+
+	log.Println("Finalizado")
+	return nil
+}
+
+func min(a, b int) int {
+	if a <= b {
+		return a
+	}
+	return b
+}
+
+func insertMultiThread(db *sql.DB, file [][]string, seq int) {
+	// apenas alfa-numericos e espaços
+	reg, err := regexp.Compile("[^a-zA-Z0-9 ]+")
+	if err != nil {
+		handleError(err)
+	}
+
+	log.Println("Iniciando transação")
+	// Abre transação
+	trc, _ := db.Begin()
+
+	// Iteração pelo arquivo
+	for i := 0; i < len(file); i++ {
+		record := file[i]
+
+		// Ajustando o separador de valor
+		s := strings.Replace(record[3], ",", ".", -1)
+		salario, err := strconv.ParseFloat(s, 64) //converte pra float
+
+		// Objeto temporario
+		fTemp := FuncPublico{
+			Name:     reg.ReplaceAllString(record[0], ""),
+			Position: reg.ReplaceAllString(record[1], ""),
+			Place:    reg.ReplaceAllString(record[2], ""),
+			Salary:   salario}
+
+		// Insert na tabela, se tiver conflito não faz nada
+		sql := "insert into public_agent as v (name, position, place, salary, id_lote) values ($1, $2, $3, $4, $5) ON CONFLICT ON CONSTRAINT public_agent_pkey DO nothing"
+		_, err = trc.Exec(sql, fTemp.Name, fTemp.Position, fTemp.Place, fTemp.Salary, seq)
+		if err != nil {
+			trc.Rollback()
+			handleError(err)
+		}
+
+	}
+	updateSQL := `UPDATE clients b
+				set salary = (select c.salary from public_agent c where b.name = c.name),
+					position = (select c.position from public_agent c where b.name = c.name),
+					place = (select c.place from public_agent c where b.name = c.name),
+					is_special = (select case when c.salary >= 20000  then true else false end  from public_agent c where b.name = c.name),
+					lote_id = (case when is_special = false then $1 else lote_id end)
+			where exists (select 1 from public_agent c where b.name = c.name)`
+
+	_, err = trc.Exec(updateSQL, seq)
+	if err != nil {
+		trc.Rollback()
+		handleError(err)
+	}
+	err = trc.Commit()
+	log.Println("Commit efetuado")
+
+	wg.Done()
+
+	return
 }
 
 // Função responsável pelo envio de e-mail/notificação dos Leads

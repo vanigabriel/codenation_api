@@ -1,8 +1,8 @@
 
-
 /*
 Tabela para LOGIN
 */
+-- name: create-administrators-table
 CREATE TABLE administrators(
   id serial PRIMARY KEY,
   username VARCHAR (50) UNIQUE NOT NULL,
@@ -10,29 +10,43 @@ CREATE TABLE administrators(
   created_on TIMESTAMP NOT NULL
 );
 
+/* Insere admin padrão */
+-- name: create administrators
+INSERT INTO administrators
+(id, username, "password", created_on)
+VALUES(1, 'admin', '$2a$08$4Xg/k7P21dAbKe.1zL4n0.gW.urUXm1yoSPAcsFfF7vP/LA.4bwbu', '2019-07-24 09:04:19.831');
+
+
 /*
 Tabela dos usuários/funcionários do Banco
 */
-CREATE TABLE users(
-  id serial PRIMARY KEY,
-  name VARCHAR (150),
-  email VARCHAR (200) NOT NULL, 
-  position VARCHAR (200),
-  created_on TIMESTAMP NOT NULL
-);  
+-- name: create-users-table
+CREATE TABLE users (
+	id serial NOT NULL,
+	"name" varchar(150) NULL,
+	email varchar(200) NOT NULL,
+	"position" varchar(200) NULL,
+	created_on timestamp NOT NULL,
+	is_active varchar NULL,
+	CONSTRAINT users_pkey PRIMARY KEY (id)
+);
 
 /*
 Tabela de clientes do Banco
 */
-CREATE TABLE clients(
-  id serial PRIMARY KEY,
-  name VARCHAR (150) UNIQUE NOT NULL, 
-  salary DECIMAL(10,2), 
-  position VARCHAR (150),
-  place VARCHAR (200), 
-  is_special BOOLEAN NOT NULL DEFAULT false,
-  created_on TIMESTAMP NOT NULL
+CREATE TABLE clients (
+	id serial NOT NULL,
+	"name" varchar(150) NOT NULL,
+	salary numeric(10,2) NULL,
+	"position" varchar(150) NULL,
+	place varchar(200) NULL,
+	is_special bool NOT NULL DEFAULT false,
+	created_on timestamp NOT NULL,
+	lote_id int4 NULL,
+	CONSTRAINT clients_name_key UNIQUE (name),
+	CONSTRAINT clients_pkey PRIMARY KEY (id)
 );
+CREATE INDEX clients_lote_id_idx ON clients USING btree (lote_id);
 
 /*
 Tabela onde fica os funcionários publicos
@@ -42,8 +56,11 @@ CREATE TABLE public_agent (
 	position varchar(150) NULL,
 	place varchar NULL,
 	salary numeric NULL,
+	id_lote int4 NULL,
 	CONSTRAINT public_agent_pkey PRIMARY KEY (name)
 );
+CREATE INDEX public_agent_id_lote_idx ON public_agent USING btree (id_lote);
+
 
 
 /* 
@@ -84,3 +101,8 @@ CREATE TABLE events_to (
 
 
 
+CREATE SEQUENCE lote_agent
+	INCREMENT BY 1
+	MINVALUE 1
+	MAXVALUE 9223372036854775807
+	START 1;

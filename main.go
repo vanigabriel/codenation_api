@@ -12,6 +12,7 @@ import (
 	//_ "./docs/docs.go" // For gin-swagger
 
 	"github.com/gin-gonic/gin"
+	"github.com/jasonlvhit/gocron"
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 
@@ -19,15 +20,15 @@ import (
 )
 
 func setupRouter() *gin.Engine {
-	// Disable Console Color
-	// gin.DisableConsoleColor()
-	r := gin.Default()
 
 	// Loga para arquivo
 	gin.DefaultWriter = io.MultiWriter(logFile, os.Stdout)
 
-	// Requisição do login inicial
-	r.POST("/login", Login)
+	// Disable Console Color
+	// gin.DisableConsoleColor()
+	r := gin.Default()
+
+	r.POST("/login", Login) // Requisição do login inicial
 
 	// Para acessar esse grupo, precisa enviar na requisição o user: admin e pass: admin, modelo basic auth
 	authorized := r.Group("/", gin.BasicAuth(gin.Accounts{
@@ -43,11 +44,15 @@ func setupRouter() *gin.Engine {
 	// Clientes
 	authorized.POST("clients", uploadCliente) // Carrega clientes do arquivo
 	authorized.GET("clients", getClientes)    // Get Clientes
+	// Delete clients
+	// Update clients
 
 	authorized.POST("publicagents", updatePublicAgents) //Atualiza funcionários publicos
 	authorized.POST("events", sentEmail)                // Cria evento e envia e-mail
 
-	// Get notificações
+	authorized.GET("events", getEvents)       // Get notificações
+	authorized.GET("events/:id", getEventsID) // Get notificação ID específica
+	authorized.GET("leads/:id", getLeadsID)   // get leads da notificação ID
 
 	/*
 		Esquema notificações:
@@ -76,14 +81,204 @@ func main() {
 	log.SetOutput(wrt)
 	defer logFile.Close()
 
+	err := createDB()
+	handleError(err)
+
 	// Toda segunda às 07:30 ele vai disparar a função que baixa e importa o CSV dos funcionários publicos de SP
-	//gocron.Every(1).Monday().At("07:30").Do(schedulerAgents)
-	//<-gocron.Start()
+	gocron.Every(1).Monday().At("07:30").Do(schedulerAgents)
+	<-gocron.Start()
 
 	r := setupRouter()
 
 	r.Run(":" + os.Getenv("port"))
+	//err = importCSVMultiThread("remuneracao.csv")
+	//handleError(err)
 
+}
+
+func getEvents(c *gin.Context) {
+	log.Println("Iniciando getEvents")
+
+	log.Println("Abrindo conexão com o banco")
+	// Abre conexão com o banco
+	db, err := initDB()
+	if err != nil {
+		log.Println("Erro ao iniciar o banco")
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
+		return
+	}
+	defer db.Close()
+
+	sql := `select 
+			et.events_id,
+			u."name",
+			u.email,
+			e.qt_leads
+		from events_to et 
+		join events e on e.id = et.events_id
+		join users u on u.id = et.user_id
+		order by et.events_id desc, u.name asc`
+
+	log.Println("Verificando se existe algum evento")
+	// Valida se já existe usuário ativo com esse email
+	if !rowExists(sql, db) {
+		log.Println("Nenhum evento encontrado")
+		c.JSON(http.StatusNoContent, gin.H{"message": "Nenhum evento encontrado"})
+		return
+	}
+
+	log.Println("Recuperando eventos")
+
+	rows, err := db.Query(sql)
+	if err != nil {
+		log.Println("Erro ao consultar")
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
+		return
+	}
+	defer rows.Close()
+
+	var Evts []Events
+
+	for rows.Next() {
+		evt := new(Events)
+		rows.Scan(&evt.ID, &evt.Name, &evt.Email, &evt.QtLeads)
+		Evts = append(Evts, *evt)
+	}
+
+	log.Println("Consulta finalizando, retornando")
+
+	c.JSON(http.StatusOK, Evts)
+}
+
+func getEventsID(c *gin.Context) {
+	log.Println("Iniciando getEventsId")
+
+	id := c.Param("id")
+	log.Println("Carregando ID")
+
+	if len(id) == 0 {
+		log.Println("ID não localizado")
+		c.JSON(http.StatusBadRequest, gin.H{"message": "ID não informado"})
+		return
+	}
+
+	log.Println("Abrindo conexão com o banco")
+	// Abre conexão com o banco
+	db, err := initDB()
+	if err != nil {
+		log.Println("Erro ao iniciar o banco")
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
+		return
+	}
+	defer db.Close()
+
+	sql := `select 
+			et.events_id,
+			u."name",
+			u.email,
+			e.qt_leads
+		from events_to et 
+		join events e on e.id = et.events_id
+		join users u on u.id = et.user_id
+		where et.events_id = $1
+		order by et.events_id desc, u.name asc`
+
+	log.Println("Verificando se existe algum evento")
+	// Valida se já existe usuário ativo com esse email
+	if !rowExists(sql, db, id) {
+		log.Println("Nenhum evento encontrado")
+		c.JSON(http.StatusNoContent, gin.H{"message": "Nenhum evento encontrado"})
+		return
+	}
+
+	log.Println("Recuperando eventos")
+
+	rows, err := db.Query(sql, id)
+	if err != nil {
+		log.Println("Erro ao consultar")
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
+		return
+	}
+	defer rows.Close()
+
+	var Evts []Events
+
+	for rows.Next() {
+		evt := new(Events)
+		rows.Scan(&evt.ID, &evt.Name, &evt.Email, &evt.QtLeads)
+		Evts = append(Evts, *evt)
+	}
+
+	log.Println("Consulta finalizando, retornando")
+
+	c.JSON(http.StatusOK, Evts)
+}
+
+func getLeadsID(c *gin.Context) {
+	log.Println("Iniciando getLeadsId")
+
+	id := c.Param("id")
+	log.Println("Carregando ID")
+
+	if len(id) == 0 {
+		log.Println("ID não localizado")
+		c.JSON(http.StatusBadRequest, gin.H{"message": "ID não informado"})
+		return
+	}
+
+	log.Println("Abrindo conexão com o banco")
+	// Abre conexão com o banco
+	db, err := initDB()
+	if err != nil {
+		log.Println("Erro ao iniciar o banco")
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
+		return
+	}
+	defer db.Close()
+
+	sql := `select 
+				f."name",
+				f."position",
+				f.place,
+				f.salary
+			from events e 
+			join events_leads el on el.event_id = e.id
+			join public_agent f on f."name" = el."name"
+			where e.id = $1
+			order by f.name asc`
+
+	log.Println("Verificando se existe algum lead")
+	// Valida se já existe usuário ativo com esse email
+	if !rowExists(sql, db, id) {
+		log.Println("Nenhum lead encontrado")
+		c.JSON(http.StatusNoContent, gin.H{"message": "Nenhum lead encontrado"})
+		return
+	}
+
+	log.Println("Recuperando Leads")
+
+	rows, err := db.Query(sql, id)
+	if err != nil {
+		log.Println("Erro ao consultar")
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
+		return
+	}
+	defer rows.Close()
+
+	var FPs []FuncPublico
+
+	for rows.Next() {
+		fp := new(FuncPublico)
+		rows.Scan(&fp.Name, &fp.Position, &fp.Place, &fp.Salary)
+		FPs = append(FPs, *fp)
+	}
+
+	log.Println("Consulta finalizando, retornando")
+
+	c.JSON(http.StatusOK, FPs)
 }
 
 // Registra usuário no banco (que irá receber o alerta)
@@ -224,7 +419,7 @@ func getUsers(c *gin.Context) {
 	defer db.Close()
 
 	log.Println("Consultando usuários")
-	rows, err := db.Query("SELECT id, name, email FROM users where is_active IS DISTINCT FROM 'N' ORDER BY name")
+	rows, err := db.Query("SELECT id, name, email, position FROM users where is_active IS DISTINCT FROM 'N' ORDER BY name")
 	if err != nil {
 		log.Println("Erro ao consultar")
 		log.Println(err)
@@ -237,7 +432,7 @@ func getUsers(c *gin.Context) {
 
 	for rows.Next() {
 		usr := new(User)
-		rows.Scan(&usr.ID, &usr.Name, &usr.Email)
+		rows.Scan(&usr.ID, &usr.Name, &usr.Email, &usr.Position)
 		usrs = append(usrs, *usr)
 	}
 
@@ -474,7 +669,10 @@ func updatePublicAgents(c *gin.Context) {
 	if lockAgents != 'S' {
 		go func() {
 			err := baixarCSV()
-			handleError(err)
+			if err != nil {
+				log.Panicln(err)
+				return
+			}
 
 		}()
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"sync"
 	"time"
 )
 
@@ -17,6 +18,7 @@ const (
 )
 
 var lockAgents = 'N'
+var wg sync.WaitGroup
 
 // Nome do arquivo de log
 var logFile, _ = os.OpenFile("log_"+time.Now().Format("01-02-2006")+".log", os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660)
@@ -30,10 +32,10 @@ type PF struct {
 
 // FuncPublico guarda o funcionario antes de importar para o banco
 type FuncPublico struct {
-	Name     string
-	Position string
-	Place    string
-	Salary   float64
+	Name     string  `json:"name,omitempty"`
+	Position string  `json:"position,omitempty"`
+	Place    string  `json:"place,omitempty"`
+	Salary   float64 `json:"salary,omitempty"`
 }
 
 // User guarda o usuário antes de importar para o banco
@@ -65,4 +67,12 @@ type Clientes struct {
 	Position string  `json:"position"`
 	Place    string  `json:"place"`
 	IsClient string  `json:"isclient"`
+}
+
+// Events estrutura que guarda os eventos
+type Events struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Email   string `json:"email"`
+	QtLeads int    `json:"qtLeads"`
 }
