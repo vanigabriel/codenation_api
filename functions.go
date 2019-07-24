@@ -22,6 +22,9 @@ import (
 // Função que busca o arquivo de funcionários publicos de SP
 func baixarCSV() error {
 	log.Println("Iniciando BaixarCSV")
+
+	lockAgents = 'S'
+
 	filepath := "remuneracao.rar"
 	actualPath, _ := os.Getwd()
 
@@ -89,6 +92,7 @@ func baixarCSV() error {
 	}
 
 	log.Println("Finalizando BaixarCSV")
+	lockAgents = 'N'
 	return err
 }
 
@@ -136,6 +140,10 @@ func importCSV(src string) error {
 		return err
 	}
 
+	seq, err := nextSeqSequence(db, "lote_agent")
+	if err != nil {
+		return err
+	}
 	// Abrindo arquivo
 	f, err := os.Open(src)
 	if err != nil {
@@ -180,8 +188,8 @@ func importCSV(src string) error {
 			Salary:   salario}
 
 		// Insert na tabela, se tiver conflito não faz nada
-		sql := "insert into public_agent as v (name, position, place, salary) values ($1, $2, $3, $4) ON CONFLICT ON CONSTRAINT public_agent_pkey DO nothing"
-		_, err = trc.Exec(sql, fTemp.Name, fTemp.Position, fTemp.Place, fTemp.Salary)
+		sql := "insert into public_agent as v (name, position, place, salary, id, lote_id) values ($1, $2, $3, $4, $5) ON CONFLICT ON CONSTRAINT public_agent_pkey DO nothing"
+		_, err = trc.Exec(sql, fTemp.Name, fTemp.Position, fTemp.Place, fTemp.Salary, seq)
 		if err != nil {
 			trc.Rollback()
 			return err
@@ -191,10 +199,11 @@ func importCSV(src string) error {
 			set salary = $1,
 				position = $2,
 				place = $3,
-				is_special = true
-			where name = $4`
+				is_special = true,
+				lote_id = (case when is_special = false then $4 else lote_id end)
+			where name = $5`
 
-		_, err = trc.Exec(updateSQL, fTemp.Salary, fTemp.Position, fTemp.Place, fTemp.Name)
+		_, err = trc.Exec(updateSQL, fTemp.Salary, fTemp.Position, fTemp.Place, seq, fTemp.Name)
 		if err != nil {
 			trc.Rollback()
 			return err
@@ -288,11 +297,13 @@ func createEvents(option string) error {
 	return err
 }
 
-func schedulerAgents() {
+func schedulerAgents() error {
 	err := baixarCSV()
-	handleError(err)
+	if err != nil {
+		return err
+	}
 	err = createEvents("full")
-	handleError(err)
+	return err
 }
 
 // Função auxiliar que envia o e-mail
@@ -351,8 +362,9 @@ func createCSVLeads(db *sql.DB, fileName string, option string) (int, error) {
 	defer csvfile.Close()
 
 	csvwriter := csv.NewWriter(csvfile)
+	csvwriter.Comma = ';' //altera separador
 	// Cabeçalho
-	_ = csvwriter.Write([]string{"Nome", "Cargo", "Organização", "Salário"})
+	_ = csvwriter.Write([]string{"Name", "Position", "Plane", "Salary"})
 
 	qtdLeads := 0
 
@@ -367,7 +379,7 @@ func createCSVLeads(db *sql.DB, fileName string, option string) (int, error) {
 		rows.Scan(&funcp.Name, &funcp.Position, &funcp.Place, &funcp.Salary)
 
 		// Cria linha
-		row := []string{funcp.Name, funcp.Position, funcp.Place, fmt.Sprintf("%f", funcp.Salary)}
+		row := []string{funcp.Name, funcp.Position, funcp.Place, fmt.Sprintf("R$%.2f", funcp.Salary)}
 		_ = csvwriter.Write(row)
 
 	}
@@ -387,7 +399,7 @@ func handleError(err error) {
 func emailUsers(db *sql.DB) ([]string, error) {
 	var emails []string
 
-	sql := `select email from users`
+	sql := `select email from users where is_active IS DISTINCT FROM 'N'`
 
 	rows, err := db.Query(sql)
 	if err != nil {
@@ -417,6 +429,24 @@ func rowExists(query string, db *sql.DB, args ...interface{}) bool {
 func nextSeq(db *sql.DB, table string, column string) (int, error) {
 	// Pega o próximo ID da tabela, recebe a conexão do banco, a tabela e o campo que é a ID
 	sql := `SELECT nextval(pg_get_serial_sequence('` + table + `', '` + column + `'));`
+
+	row, err := db.Query(sql)
+	if err != nil {
+		return 0, err
+	}
+	var seq int
+	row.Next()
+
+	row.Scan(&seq)
+
+	return seq, nil
+
+}
+
+// Função auxiliar que pega o próximo valor de ID da tabela <table>
+func nextSeqSequence(db *sql.DB, sequence string) (int, error) {
+	// Pega o próximo ID da sequence
+	sql := `SELECT nextval('` + sequence + `');`
 
 	row, err := db.Query(sql)
 	if err != nil {

@@ -1,4 +1,4 @@
-CREATE DATABASE bancouati;
+
 
 /*
 Tabela para LOGIN
@@ -16,7 +16,7 @@ Tabela dos usuários/funcionários do Banco
 CREATE TABLE users(
   id serial PRIMARY KEY,
   name VARCHAR (150),
-  email VARCHAR (200) UNIQUE NOT NULL, 
+  email VARCHAR (200) NOT NULL, 
   position VARCHAR (200),
   created_on TIMESTAMP NOT NULL
 );  
@@ -37,9 +37,9 @@ CREATE TABLE clients(
 /*
 Tabela onde fica os funcionários publicos
 */
-REATE TABLE public.public_agent (
-	"name" varchar(150) NOT NULL,
-	"position" varchar(150) NULL,
+CREATE TABLE public_agent (
+	name varchar(150) NOT NULL,
+	position varchar(150) NULL,
 	place varchar NULL,
 	salary numeric NULL,
 	CONSTRAINT public_agent_pkey PRIMARY KEY (name)
@@ -49,7 +49,7 @@ REATE TABLE public.public_agent (
 /* 
  Tabela de eventos/notificações
 */
-CREATE TABLE public.events (
+CREATE TABLE events (
 	id serial NOT NULL,
 	qt_leads int4 NULL,
 	created_on timestamp NULL,
@@ -59,9 +59,9 @@ CREATE TABLE public.events (
 /*
 Leads vinculados ao evento
 */
-CREATE TABLE public.events_leads (
+CREATE TABLE events_leads (
 	id serial NOT NULL,
-	"name" varchar(150) NOT NULL,
+	name varchar(150) NOT NULL,
 	event_id int4 NULL,
 	created_on timestamp NOT NULL,
 	CONSTRAINT events_leads_pkey PRIMARY KEY (id),
@@ -72,7 +72,7 @@ CREATE TABLE public.events_leads (
 /*
 Usuários que receberam os eventos
 */
-CREATE TABLE public.events_to (
+CREATE TABLE events_to (
 	id serial NOT NULL,
 	events_id int4 NULL,
 	user_id int4 NULL,

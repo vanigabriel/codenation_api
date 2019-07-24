@@ -16,6 +16,8 @@ const (
 	dbname   = "postgres"
 )
 
+var lockAgents = 'N'
+
 // Nome do arquivo de log
 var logFile, _ = os.OpenFile("log_"+time.Now().Format("01-02-2006")+".log", os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660)
 
@@ -36,7 +38,7 @@ type FuncPublico struct {
 
 // User guarda o usuário antes de importar para o banco
 type User struct {
-	ID       string `json:"id"`
+	ID       int    `json:"id"`
 	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Position string `json:"position"`
@@ -50,8 +52,9 @@ type Credentials struct {
 
 // Users estrutura que guarda os dados da tabela users
 type Users struct {
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Position string `json:"position"`
 }
 
 // Clientes estrutura que guarda os dados da tabela clients
