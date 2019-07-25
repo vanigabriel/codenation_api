@@ -77,3 +77,37 @@ type Events struct {
 	Email   string `json:"email"`
 	QtLeads int    `json:"qtLeads"`
 }
+
+// Statistic estrutura que guarda as estatísticas para o dashboard
+type Statistic struct {
+	Month           string  `json:"month"`
+	Clients         int     `json:"clients"`
+	Prospects       int     `json:"prospects"`
+	TotalSalProsp   float64 `json:"totalSalProsp"`
+	MaxSalProsp     float64 `json:"maxSalProsp"`
+	MinSalProsp     float64 `json:"minSalProsp"`
+	AvgSalProsp     float64 `json:"avgSalProsp"`
+	MedianSalProsp  float64 `json:"medSalProsp"`
+	ModeSalProsp    float64 `json:"modSalProsp"`
+	TotalSalClient  float64 `json:"totalSalClient"`
+	MaxSalClient    float64 `json:"maxSalClient"`
+	MinSalClient    float64 `json:"minSalClient"`
+	AvgSalClient    float64 `json:"avgSalClient"`
+	MedianSalClient float64 `json:"medSalClient"`
+	ModeSalClient   float64 `json:"modSalClient"`
+}
+
+// Rank orgãos
+type Rank struct {
+	Place          string  `json:"place"`
+	TotalSalProsp  float64 `json:"totalSalProsp"`
+	QtdProsp       int     `json:"qtdProps"`
+	TotalSalClient float64 `json:"totalSalClient"`
+	QtdClients     int     `json:"qtdClient"`
+}
+
+// HeaderStats cabeçalho da rota de estatística
+type HeaderStats struct {
+	Stats []Statistic `json:"statistics"`
+	Rs    []Rank      `json:"ranks"`
+}

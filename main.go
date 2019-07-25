@@ -56,6 +56,8 @@ func setupRouter() *gin.Engine {
 	authorized.GET("events/:id", getEventsID) // Get notificação ID específica
 	authorized.GET("leads/:id", getLeadsID)   // get leads da notificação ID
 
+	authorized.GET("dashboard", getStatistic) // Get statistics to dashboard
+
 	/*
 		Esquema notificações:
 			Importa csv -> valida cliente
@@ -64,9 +66,7 @@ func setupRouter() *gin.Engine {
 			com o resultado, ele irá inserir na tabela de eventos os que não tiveram e-mail enviado a mais de 7 dias
 	*/
 
-	// Funcionarios publicos dos ultimos meses
 	// Verificar Docker
-	// DAshboard : Qtd total de +20mil, qtd q eu detenho, valor, dos ultimos meses, o mairo valor de salário, menor valor de salário, média, qtd de pessoa por orgão
 
 	// Rota para criar administrador
 	authorized.POST("admin", registerAdministrator)
@@ -698,4 +698,192 @@ func sentEmail(c *gin.Context) {
 	}()
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Rotina iniciada em segundo plano"})
+}
+
+func getStatistic(c *gin.Context) {
+	log.Println("Iniciando getStatistic")
+
+	Statistics := []Statistic{
+		Statistic{
+			Month:           "JAN",
+			Clients:         98,
+			Prospects:       15735,
+			TotalSalProsp:   473809912.74,
+			MaxSalProsp:     183947.11,
+			MinSalProsp:     20001.14,
+			AvgSalProsp:     30109.93,
+			MedianSalProsp:  27512.12,
+			ModeSalProsp:    23048.59,
+			TotalSalClient:  454545.67,
+			MaxSalClient:    20765.18,
+			MinSalClient:    0,
+			AvgSalClient:    4638.22,
+			MedianSalClient: 3560.17,
+			ModeSalClient:   2968.7,
+		},
+		Statistic{
+			Month:           "FEV",
+			Clients:         100,
+			Prospects:       15720,
+			TotalSalProsp:   472050828.03,
+			MaxSalProsp:     201171.87,
+			MinSalProsp:     20001.11,
+			AvgSalProsp:     30024.85,
+			MedianSalProsp:  27416.11,
+			ModeSalProsp:    23048.59,
+			TotalSalClient:  478221.47,
+			MaxSalClient:    21899.52,
+			MinSalClient:    440.56,
+			AvgSalClient:    4782.21,
+			MedianSalClient: 3616.62,
+			ModeSalClient:   2968.7,
+		},
+		Statistic{
+			Month:           "MAR",
+			Clients:         99,
+			Prospects:       15728,
+			TotalSalProsp:   470930347.39,
+			MaxSalProsp:     143402.74,
+			MinSalProsp:     20000.06,
+			AvgSalProsp:     29940.25,
+			MedianSalProsp:  27357.55,
+			ModeSalProsp:    23048.59,
+			TotalSalClient:  456214.52,
+			MaxSalClient:    20765.18,
+			MinSalClient:    445.42,
+			AvgSalClient:    4608.22,
+			MedianSalClient: 3619.59,
+			ModeSalClient:   2968.7,
+		},
+		Statistic{
+			Month:           "ABR",
+			Clients:         97,
+			Prospects:       15797,
+			TotalSalProsp:   471729657.37,
+			MaxSalProsp:     143402.74,
+			MinSalProsp:     20000.06,
+			AvgSalProsp:     29860.08,
+			MedianSalProsp:  27239.64,
+			ModeSalProsp:    23048.59,
+			TotalSalClient:  453071.01,
+			MaxSalClient:    20765.18,
+			MinSalClient:    445.42,
+			AvgSalClient:    4670.83,
+			MedianSalClient: 3619.59,
+			ModeSalClient:   2968.7,
+		},
+		Statistic{
+			Month:           "MAI",
+			Clients:         98,
+			Prospects:       16099,
+			TotalSalProsp:   481586971.03,
+			MaxSalProsp:     179844.96,
+			MinSalProsp:     20000.06,
+			AvgSalProsp:     29912.23,
+			MedianSalProsp:  27156.56,
+			ModeSalProsp:    23048.59,
+			TotalSalClient:  454522.10,
+			MaxSalClient:    20765.18,
+			MinSalClient:    425.95,
+			AvgSalClient:    4637.98,
+			MedianSalClient: 3627.90,
+			ModeSalClient:   2968.7,
+		},
+	}
+
+	//Abrindo conexão com o banco de dados
+	db, err := initDB()
+	if err != nil {
+		log.Println("Erro ao iniciar o banco de dados")
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
+		return
+	}
+	defer db.Close()
+
+	// Statisticas dos Prospects
+	sqlS := `select 
+			count(a.name) qtd_pessoas,
+			sum(a.salary) salario_total,
+			max(a.salary) salario_maior,
+			min(a.salary) salario_menor,
+			round(avg(a.salary),2) salario_media,
+			round(median(a.salary),2) salario_mediana,
+			round(mode() WITHIN GROUP (ORDER BY a.salary),2) salario_moda,
+			'JUL' mes_ref
+			from public_agent a
+			where a.salary > 20000 and not exists( select 1 from clients b where b."name" = a."name")`
+
+	row := db.QueryRow(sqlS)
+
+	var tempStat Statistic
+
+	err = row.Scan(&tempStat.Prospects, &tempStat.TotalSalProsp, &tempStat.MaxSalProsp, &tempStat.MinSalProsp, &tempStat.AvgSalProsp, &tempStat.MedianSalProsp, &tempStat.ModeSalProsp, &tempStat.Month)
+	if err != nil && err != sql.ErrNoRows {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
+		return
+	}
+
+	//Statistica dos clientes
+	sqlS = `select 
+		count(a.name) qtd_pessoas,
+		sum(a.salary) salario_total,
+		max(a.salary) salario_maior,
+		min(a.salary) salario_menor,
+		round(avg(a.salary),2) salario_media,
+		round(median(a.salary),2) salario_mediana,
+		round(mode() WITHIN GROUP (ORDER BY a.salary),2) salario_moda
+		from public_agent a
+		where exists( select 1 from clients b where b."name" = a."name")`
+
+	row = db.QueryRow(sqlS)
+
+	err = row.Scan(&tempStat.Clients, &tempStat.TotalSalClient, &tempStat.MaxSalClient, &tempStat.MinSalClient, &tempStat.AvgSalClient, &tempStat.MedianSalClient, &tempStat.ModeSalClient)
+	if err != nil && err != sql.ErrNoRows {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
+		return
+	}
+
+	Statistics = append(Statistics, tempStat)
+
+	sqlS = `select
+				x.qtd_pessoas,
+				x.salario_total,
+				x.place,
+				count(*) qtd_clientes,
+				sum(w.salary) salario_clientes
+			from(select	count(a.name) qtd_pessoas,
+					sum(a.salary) salario_total,
+					a.place
+				from	public_agent a
+				where	a.salary > 20000 and not exists(select	1 from	clients b	where	b."name" = a."name")
+				group by	a.place
+				order by 1 desc ,	2 desc
+				limit 15 ) x
+			join public_agent w on w.place = x.place
+			where exists (	select 1	from	clients q where	q.name = w."name")
+			group by x.qtd_pessoas,x.salario_total,x.place
+			order by 1 desc ,	2 desc`
+
+	var Ranks []Rank
+
+	rows, err := db.Query(sqlS)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
+		return
+	}
+
+	for rows.Next() {
+		var r Rank
+		rows.Scan(&r.QtdProsp, &r.TotalSalProsp, &r.Place, &r.QtdClients, &r.TotalSalClient)
+		Ranks = append(Ranks, r)
+	}
+
+	var HS = HeaderStats{Statistics, Ranks}
+
+	c.JSON(http.StatusOK, HS)
+
 }

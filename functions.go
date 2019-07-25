@@ -578,3 +578,92 @@ func nextSeqSequence(db *sql.DB, sequence string) (int, error) {
 	return seq, nil
 
 }
+
+// Importa CSV multithread
+func importCSVMultiThreadAntigo(src string, mes string) error {
+
+	log.Println("Abrindo conexão com o banco para importar")
+	db, err := initDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	seq, err := nextSeqSequence(db, "lote_agent")
+	if err != nil {
+		return err
+	}
+
+	// Abrindo arquivo
+	f, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	log.Println("Iniciando leitura do arquivo")
+	// Inicia leitura do CSV
+	r := csv.NewReader(bufio.NewReader(f))
+	r.Comma = ';' //altera separador
+
+	r.Read() //retira cabeçalho
+
+	result, _ := r.ReadAll()
+
+	log.Println(len(result))
+
+	for i := 0; i < len(result); i += 100000 {
+		resultSplit := result[i:min(i+100000, len(result))]
+		wg.Add(1)
+		go insertMultiThreadAntigo(db, resultSplit, seq, mes)
+	}
+
+	log.Println("Aguardando")
+	wg.Wait()
+
+	log.Println("Finalizado")
+	return nil
+}
+
+func insertMultiThreadAntigo(db *sql.DB, file [][]string, seq int, mes string) {
+	// apenas alfa-numericos e espaços
+	reg, err := regexp.Compile("[^a-zA-Z0-9 ]+")
+	if err != nil {
+		handleError(err)
+	}
+
+	log.Println("Iniciando transação")
+	// Abre transação
+	trc, _ := db.Begin()
+
+	// Iteração pelo arquivo
+	for i := 0; i < len(file); i++ {
+		record := file[i]
+
+		// Ajustando o separador de valor
+		s := strings.Replace(record[3], ",", ".", -1)
+		salario, err := strconv.ParseFloat(s, 64) //converte pra float
+
+		// Objeto temporario
+		fTemp := FuncPublico{
+			Name:     reg.ReplaceAllString(record[0], ""),
+			Position: reg.ReplaceAllString(record[1], ""),
+			Place:    reg.ReplaceAllString(record[2], ""),
+			Salary:   salario}
+
+		// Insert na tabela, se tiver conflito não faz nada
+		sql := "insert into public_agent_antigo as v (name, position, place, salary, id_lote, mes_ref) values ($1, $2, $3, $4, $5, $6) ON CONFLICT ON CONSTRAINT public_agent_antigo_un DO nothing"
+		_, err = trc.Exec(sql, fTemp.Name, fTemp.Position, fTemp.Place, fTemp.Salary, seq, mes)
+		if err != nil {
+			trc.Rollback()
+			handleError(err)
+		}
+
+	}
+	err = trc.Commit()
+	log.Println("Commit efetuado")
+
+	wg.Done()
+
+	return
+}

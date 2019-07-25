@@ -58,7 +58,6 @@ func createDB() error {
 
 	for _, request := range requests {
 		log.Println("Executanto")
-		log.Println(requests)
 		_, err := trc.Exec(request)
 		if err != nil {
 			log.Println(err)
