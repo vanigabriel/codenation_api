@@ -19,6 +19,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	_ "github.com/lib/pq"
+
+	cors "github.com/rs/cors/wrapper/gin"
 )
 
 func setupRouter() *gin.Engine {
@@ -29,6 +31,8 @@ func setupRouter() *gin.Engine {
 	// Disable Console Color
 	// gin.DisableConsoleColor()
 	r := gin.Default()
+
+	r.Use(cors.Default())
 
 	r.POST("/login", Login) // Requisição do login inicial
 
@@ -46,8 +50,6 @@ func setupRouter() *gin.Engine {
 	// Clientes
 	authorized.POST("clients", uploadCliente) // Carrega clientes do arquivo
 	authorized.GET("clients", getClientes)    // Get Clientes
-	// Delete clients
-	// Update clients
 
 	authorized.POST("publicagents", updatePublicAgents) //Atualiza funcionários publicos
 	authorized.POST("events", sentEmail)                // Cria evento e envia e-mail
