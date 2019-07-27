@@ -15,11 +15,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jasonlvhit/gocron"
 	"github.com/joho/godotenv"
+
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/gin-contrib/cors"
 	_ "github.com/lib/pq"
-
-	cors "github.com/rs/cors/wrapper/gin"
 )
 
 func setupRouter() *gin.Engine {
@@ -59,6 +59,7 @@ func setupRouter() *gin.Engine {
 	authorized.GET("leads", getLeads)         // Get actual leads
 
 	authorized.GET("dashboard", getStatistic) // Get statistics to dashboard
+	// add qtd total clientes 20k+
 
 	// Verificar Docker
 
