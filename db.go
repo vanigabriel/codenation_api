@@ -54,12 +54,14 @@ func createDB() error {
 	}
 
 	log.Println("Separando")
-	requests := strings.Split(string(file), ";")
+	requests := strings.Split(string(file), ";;")
 
 	for _, request := range requests {
 		log.Println("Executanto")
+		request := strings.Replace(request, ";;", ";", -1)
 		_, err := trc.Exec(request)
 		if err != nil {
+			trc.Rollback()
 			log.Println(err)
 			return err
 		}
