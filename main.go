@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/csv"
 
-	//"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -57,16 +56,9 @@ func setupRouter() *gin.Engine {
 	authorized.GET("events", getEvents)       // Get notificações
 	authorized.GET("events/:id", getEventsID) // Get notificação ID específica
 	authorized.GET("leads/:id", getLeadsID)   // get leads da notificação ID
+	authorized.GET("leads", getLeads)         // Get actual leads
 
 	authorized.GET("dashboard", getStatistic) // Get statistics to dashboard
-
-	/*
-		Esquema notificações:
-			Importa csv -> valida cliente
-
-			Ao fim da importação do csv, ele irá fazer um join com a tabela de clientes, vendo quem ainda não é cliente e ganha +20mil
-			com o resultado, ele irá inserir na tabela de eventos os que não tiveram e-mail enviado a mais de 7 dias
-	*/
 
 	// Verificar Docker
 
@@ -266,6 +258,61 @@ func getLeadsID(c *gin.Context) {
 	log.Println("Recuperando Leads")
 
 	rows, err := db.Query(sql, id)
+	if err != nil {
+		log.Println("Erro ao consultar")
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
+		return
+	}
+	defer rows.Close()
+
+	var FPs []FuncPublico
+
+	for rows.Next() {
+		fp := new(FuncPublico)
+		rows.Scan(&fp.Name, &fp.Position, &fp.Place, &fp.Salary)
+		FPs = append(FPs, *fp)
+	}
+
+	log.Println("Consulta finalizando, retornando")
+
+	c.JSON(http.StatusOK, FPs)
+}
+
+func getLeads(c *gin.Context) {
+	log.Println("Iniciando getLeads")
+
+	log.Println("Abrindo conexão com o banco")
+	// Abre conexão com o banco
+	db, err := initDB()
+	if err != nil {
+		log.Println("Erro ao iniciar o banco")
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
+		return
+	}
+	defer db.Close()
+
+	sql := `select 
+				f."name",
+				f."position",
+				f.place,
+				f.salary
+			from  public_agent f 
+			where not exists (select 1 from clients c where c.name = f.name)
+			and f.salary > 20000
+			order by f.name asc`
+
+	log.Println("Verificando se existe algum lead")
+	// Valida se já existe usuário ativo com esse email
+	if !rowExists(sql, db) {
+		log.Println("Nenhum lead encontrado")
+		c.JSON(http.StatusNoContent, gin.H{"message": "Nenhum lead encontrado"})
+		return
+	}
+
+	log.Println("Recuperando Leads")
+
+	rows, err := db.Query(sql)
 	if err != nil {
 		log.Println("Erro ao consultar")
 		log.Println(err)
