@@ -43,8 +43,8 @@ func setupRouter() *gin.Engine {
 	// Usuários
 	authorized.GET("users", getUsers)            // Recupera usuários
 	authorized.POST("users", registerUser)       // Registra usuário
-	authorized.PUT("users/:id", updateUser)      // Atualiza usuário :id
-	authorized.DELETE("users/:id", inactiveUser) // Inativa usuário :id
+	authorized.PUT("users/:user", updateUser)      // Atualiza usuário :id
+	authorized.DELETE("users/:user", inactiveUser) // Inativa usuário :id
 
 	// Clientes
 	authorized.POST("clients", uploadCliente) // Carrega clientes do arquivo
