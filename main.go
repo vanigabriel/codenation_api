@@ -41,8 +41,8 @@ func setupRouter() *gin.Engine {
 	}))
 
 	// Usuários
-	authorized.GET("users", getUsers)            // Recupera usuários
-	authorized.POST("users", registerUser)       // Registra usuário
+	authorized.GET("users", getUsers)              // Recupera usuários
+	authorized.POST("users", registerUser)         // Registra usuário
 	authorized.PUT("users/:user", updateUser)      // Atualiza usuário :id
 	authorized.DELETE("users/:user", inactiveUser) // Inativa usuário :id
 
@@ -541,6 +541,7 @@ func uploadCliente(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
 		log.Println("Arquivo não localizado")
+		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "file not informed"})
 		return
 	}
