@@ -632,7 +632,7 @@ func uploadCliente(c *gin.Context) {
 
 func updateUser(c *gin.Context) {
 	log.Println("Iniciando updateUsers")
-	id := c.Param("id")
+	id := c.Param("user")
 	log.Println("Carregando ID")
 	if len(id) == 0 {
 		log.Println("ID não localizado")
