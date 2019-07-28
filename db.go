@@ -70,6 +70,7 @@ func createDB() error {
 	err = trc.Commit()
 	log.Println("Schema criado")
 
+
 	return err
 }
 

@@ -81,6 +81,8 @@ func main() {
 	err := createDB()
 	handleError(err)
 
+	go initPublicAgents()
+
 	s := gocron.NewScheduler()
 	// Toda segunda às 07:30 ele vai disparar a função que baixa e importa o CSV dos funcionários publicos de SP
 	s.Every(1).Monday().At("07:30").Do(schedulerAgents)
@@ -685,7 +687,7 @@ func updateUser(c *gin.Context) {
 
 // Inativa usuário
 func inactiveUser(c *gin.Context) {
-	id := c.Param("id")
+	id := c.Param("user")
 
 	//Abrindo conexão com o banco de dados
 	db, err := initDB()

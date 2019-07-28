@@ -19,6 +19,29 @@ import (
 	"github.com/scorredoira/email"
 )
 
+func initPublicAgents() error {
+	log.Println("Iniciando base dos agentes publicos")
+	//Abrindo conexão com o banco de dados
+	db, err := initDB()
+	if err != nil {
+		log.Println("Erro ao iniciar o banco de dados")
+		log.Println(err)
+		return err
+	}
+	defer db.Close()
+
+	if rowExists("select 1 from public_agent", db) {
+		log.Println("Base já populada")
+		return nil
+	}
+
+	err = baixarCSV()
+	if err != nil {
+		log.Println(err)
+	}
+	return err
+}
+
 // Função que busca o arquivo de funcionários publicos de SP
 func baixarCSV() error {
 	log.Println("Iniciando BaixarCSV")
