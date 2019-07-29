@@ -915,6 +915,7 @@ func getStatistic(c *gin.Context) {
 		return
 	}
 
+	log.Println("Trazendo statistics")
 	// Statisticas dos Prospects
 	sqlS := `select 
 			count(a.name) qtd_pessoas,
@@ -998,6 +999,7 @@ func getStatistic(c *gin.Context) {
 
 	var HS = HeaderStats{Statistics, Ranks}
 
+	log.Println("Finalizando")
 	c.JSON(http.StatusOK, HS)
 
 }
