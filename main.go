@@ -852,6 +852,12 @@ func getStatistic(c *gin.Context) {
 	}
 	defer db.Close()
 
+	if !rowExists("select 1 from clients", db) {
+		log.Println("Sem informações para o dashboard")
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Sem clientes para comparar."})
+		return
+	}
+
 	// Statisticas dos Prospects
 	sqlS := `select 
 			count(a.name) qtd_pessoas,
