@@ -55,6 +55,7 @@ func setupRouter() *gin.Engine {
 	authorized.GET("events/:id", getEventsID) // Get notificação ID específica
 	authorized.GET("leads/:id", getLeadsID)   // get leads da notificação ID
 	authorized.GET("leads", getLeads)         // Get actual leads
+	authorized.GET("fastleads", getLeadsFast) // Just first 50 leads
 
 	authorized.GET("dashboard", getStatistic) // Get statistics to dashboard
 	// add qtd total clientes 20k+
@@ -302,6 +303,62 @@ func getLeads(c *gin.Context) {
 			where not exists (select 1 from clients c where c.name = f.name)
 			and f.salary > 20000
 			order by f.name asc`
+
+	log.Println("Verificando se existe algum lead")
+	// Valida se já existe usuário ativo com esse email
+	if !rowExists(sql, db) {
+		log.Println("Nenhum lead encontrado")
+		c.JSON(http.StatusNoContent, gin.H{"message": "Nenhum lead encontrado"})
+		return
+	}
+
+	log.Println("Recuperando Leads")
+
+	rows, err := db.Query(sql)
+	if err != nil {
+		log.Println("Erro ao consultar")
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
+		return
+	}
+	defer rows.Close()
+
+	var FPs []FuncPublico
+
+	for rows.Next() {
+		fp := new(FuncPublico)
+		rows.Scan(&fp.Name, &fp.Position, &fp.Place, &fp.Salary)
+		FPs = append(FPs, *fp)
+	}
+
+	log.Println("Consulta finalizando, retornando")
+
+	c.JSON(http.StatusOK, FPs)
+}
+
+func getLeadsFast(c *gin.Context) {
+	log.Println("Iniciando getLeadsFast")
+
+	log.Println("Abrindo conexão com o banco")
+	// Abre conexão com o banco
+	db, err := initDB()
+	if err != nil {
+		log.Println("Erro ao iniciar o banco")
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err})
+		return
+	}
+	defer db.Close()
+
+	sql := `select 
+				f."name",
+				f."position",
+				f.place,
+				f.salary
+			from  public_agent f 
+			where not exists (select 1 from clients c where c.name = f.name)
+			and f.salary > 20000
+			order by f.name asc
+			limit 50`
 
 	log.Println("Verificando se existe algum lead")
 	// Valida se já existe usuário ativo com esse email

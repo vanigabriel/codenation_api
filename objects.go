@@ -67,7 +67,7 @@ type Clientes struct {
 	Salary   float64 `json:"salary"`
 	Position string  `json:"position"`
 	Place    string  `json:"place"`
-	IsClient string  `json:"isclient"`
+	IsClient string  `json:"isSpecial"`
 }
 
 // Events estrutura que guarda os eventos
