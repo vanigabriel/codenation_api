@@ -10,8 +10,6 @@ import (
 	"net/http"
 	"os"
 
-	//_ "./docs/docs.go" // For gin-swagger
-
 	"github.com/gin-gonic/gin"
 	"github.com/jasonlvhit/gocron"
 	"github.com/joho/godotenv"
@@ -857,11 +855,11 @@ func getStatistic(c *gin.Context) {
 	// Statisticas dos Prospects
 	sqlS := `select 
 			count(a.name) qtd_pessoas,
-			sum(a.salary) salario_total,
-			max(a.salary) salario_maior,
-			min(a.salary) salario_menor,
+			sum(coalesce(a.salary,0)) salario_total,
+			max(coalesce(a.salary,0)) salario_maior,
+			min(coalesce(a.salary,0)) salario_menor,
 			round(avg(a.salary),2) salario_media,
-			round(median(a.salary),2) salario_mediana,
+			round(coalesce(median(a.salary),0),2) salario_mediana,
 			round(mode() WITHIN GROUP (ORDER BY a.salary),2) salario_moda,
 			'JUL' mes_ref
 			from public_agent a
@@ -881,11 +879,11 @@ func getStatistic(c *gin.Context) {
 	//Statistica dos clientes
 	sqlS = `select 
 		count(a.name) qtd_pessoas,
-		sum(a.salary) salario_total,
-		max(a.salary) salario_maior,
-		min(a.salary) salario_menor,
-		round(avg(a.salary),2) salario_media,
-		round(median(a.salary),2) salario_mediana,
+		sum(coalesce(a.salary,0)) salario_total,
+		max(coalesce(a.salary,0)) salario_maior,
+		min(coalesce(a.salary,0)) salario_menor,
+		round(avg(coalesce(a.salary,0)),2) salario_media,
+		round(median(coalesce(a.salary,0)),2) salario_mediana,
 		round(mode() WITHIN GROUP (ORDER BY a.salary),2) salario_moda
 		from public_agent a
 		where exists( select 1 from clients b where b."name" = a."name")`
@@ -906,9 +904,9 @@ func getStatistic(c *gin.Context) {
 				x.salario_total,
 				x.place,
 				count(*) qtd_clientes,
-				sum(w.salary) salario_clientes
+				sum(coalesce(w.salary,0)) salario_clientes
 			from(select	count(a.name) qtd_pessoas,
-					sum(a.salary) salario_total,
+					sum(coalesce(a.salary,0)) salario_total,
 					a.place
 				from	public_agent a
 				where	a.salary > 20000 and not exists(select	1 from	clients b	where	b."name" = a."name")
