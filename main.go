@@ -915,7 +915,7 @@ func getStatistic(c *gin.Context) {
 		return
 	}
 
-	log.Println("Trazendo statistics")
+	log.Println("Trazendo statistics dos Prospects")
 	// Statisticas dos Prospects
 	sqlS := `select 
 			count(a.name) qtd_pessoas,
@@ -940,6 +940,7 @@ func getStatistic(c *gin.Context) {
 		return
 	}
 
+	log.Println("Trazendo statistics dos Clientes")
 	//Statistica dos clientes
 	sqlS = `select 
 		count(a.name) qtd_pessoas,
@@ -962,10 +963,10 @@ func getStatistic(c *gin.Context) {
 	}
 
 	Statistics = append(Statistics, tempStat)
-
+	log.Println("Trazendo ranks")
 	sqlS = `select
-				x.qtd_pessoas,
-				x.salario_total,
+				coalesce(x.qtd_pessoas, 0) qtd_pessoas,
+				COALESCE(x.salario_total, 0) salario_total,
 				x.place,
 				count(*) qtd_clientes,
 				sum(coalesce(w.salary,0)) salario_clientes
