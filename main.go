@@ -115,7 +115,7 @@ func getEvents(c *gin.Context) {
 			u.email,
 			e.qt_leads,
 			to_char(DATE(et.sent_at), 'DD/MM/YYYY') dt_send,
-			to_char(et.sent_at, 'HH:MI') hr_send
+			extract(hour from et.sent_at)||':'||rpad(to_char(et.sent_at, 'MI'),2,'0') hr_send
 		from events_to et 
 		join events e on e.id = et.events_id
 		join users u on u.id = et.user_id
