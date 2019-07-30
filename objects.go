@@ -76,6 +76,8 @@ type Events struct {
 	Name    string `json:"name"`
 	Email   string `json:"email"`
 	QtLeads int    `json:"qtLeads"`
+	DtEnvio string `json:"dtEnvio"`
+	HrEnvio string `json:"hrEnvio"`
 }
 
 // Statistic estrutura que guarda as estatísticas para o dashboard

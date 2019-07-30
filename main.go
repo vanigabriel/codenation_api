@@ -14,9 +14,9 @@ import (
 	"github.com/jasonlvhit/gocron"
 	"github.com/joho/godotenv"
 
+	"github.com/gin-contrib/cors"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/gin-contrib/cors"
 	_ "github.com/lib/pq"
 )
 
@@ -113,7 +113,9 @@ func getEvents(c *gin.Context) {
 			et.events_id,
 			u."name",
 			u.email,
-			e.qt_leads
+			e.qt_leads,
+			to_char(DATE(et.sent_at), 'DD/MM/YYYY') dt_send,
+			to_char(et.sent_at, 'HH:MI') hr_send
 		from events_to et 
 		join events e on e.id = et.events_id
 		join users u on u.id = et.user_id
@@ -142,7 +144,7 @@ func getEvents(c *gin.Context) {
 
 	for rows.Next() {
 		evt := new(Events)
-		rows.Scan(&evt.ID, &evt.Name, &evt.Email, &evt.QtLeads)
+		rows.Scan(&evt.ID, &evt.Name, &evt.Email, &evt.QtLeads, &evt.DtEnvio, &evt.HrEnvio)
 		Evts = append(Evts, *evt)
 	}
 
@@ -1003,4 +1005,20 @@ func getStatistic(c *gin.Context) {
 	log.Println("Finalizando")
 	c.JSON(http.StatusOK, HS)
 
+}
+
+func CORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	}
 }
