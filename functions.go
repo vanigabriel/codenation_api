@@ -540,7 +540,7 @@ func handleError(err error) {
 func emailUsers(db *sql.DB) ([]string, error) {
 	var emails []string
 
-	sql := `select email from users where is_active IS DISTINCT FROM 'N' and email is not null and email <> ''`
+	sql := `select email from users where is_active IS DISTINCT FROM 'N' and email is not null and email <> '' and email like '%@%'`
 
 	rows, err := db.Query(sql)
 	if err != nil {
